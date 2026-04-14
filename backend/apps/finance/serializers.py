@@ -1,0 +1,79 @@
+from rest_framework import serializers
+from apps.finance.models import AccountSubject, Voucher, VoucherItem, ReceivablePayable, PaymentReceipt
+
+
+class AccountSubjectSerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField(read_only=True)
+    parent_name = serializers.CharField(source='parent.name', read_only=True)
+
+    class Meta:
+        model = AccountSubject
+        fields = '__all__'
+
+    def get_children(self, obj):
+        children = obj.children.filter(is_active=True)
+        if children.exists():
+            return AccountSubjectSerializer(children, many=True, context=self.context).data
+        return []
+
+
+class VoucherItemSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    subject_code = serializers.CharField(source='subject.code', read_only=True)
+
+    class Meta:
+        model = VoucherItem
+        fields = '__all__'
+
+
+class VoucherSerializer(serializers.ModelSerializer):
+    items = VoucherItemSerializer(many=True, required=False)
+    preparer_name = serializers.CharField(source='preparer.username', read_only=True)
+
+    class Meta:
+        model = Voucher
+        fields = '__all__'
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        voucher = Voucher.objects.create(**validated_data)
+        total_debit = 0
+        total_credit = 0
+        for item_data in items_data:
+            item = VoucherItem.objects.create(voucher=voucher, **item_data)
+            total_debit += item.debit or 0
+            total_credit += item.credit or 0
+        voucher.total_debit = total_debit
+        voucher.total_credit = total_credit
+        voucher.save()
+        return voucher
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        instance = super().update(instance, validated_data)
+        if items_data is not None:
+            instance.items.all().delete()
+            total_debit = 0
+            total_credit = 0
+            for item_data in items_data:
+                item = VoucherItem.objects.create(voucher=instance, **item_data)
+                total_debit += item.debit or 0
+                total_credit += item.credit or 0
+            instance.total_debit = total_debit
+            instance.total_credit = total_credit
+            instance.save()
+        return instance
+
+
+class ReceivablePayableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceivablePayable
+        fields = '__all__'
+
+
+class PaymentReceiptSerializer(serializers.ModelSerializer):
+    operator_name = serializers.CharField(source='operator.username', read_only=True)
+
+    class Meta:
+        model = PaymentReceipt
+        fields = '__all__'

@@ -1,0 +1,17 @@
+# Django核心
+django>=5.2
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+django-filter>=25.0
+
+# JWT认证
+djangorestframework-simplejwt>=5.3.0
+
+# MySQL连接
+PyMySQL>=1.1.0
+cryptography>=42.0.0
+
+# 工具
+Pillow>=10.0.0
+python-dateutil>=2.8.2
+openpyxl>=3.1.2

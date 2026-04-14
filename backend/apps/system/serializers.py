@@ -1,0 +1,114 @@
+from rest_framework import serializers
+from apps.system.models import User, Role, Menu, Department
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """
+    用户序列化器：包含部门名称、角色列表
+    """
+    dept_name = serializers.CharField(source='dept.name', read_only=True)
+    role_names = serializers.SerializerMethodField(read_only=True)
+    role_ids = serializers.PrimaryKeyRelatedField(
+        source='roles', many=True, queryset=Role.objects.all(), required=False
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'phone', 'avatar',
+            'dept', 'dept_name', 'roles', 'role_ids', 'role_names',
+            'is_active', 'created_at', 'updated_at'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'created_at': {'read_only': True},
+            'updated_at': {'read_only': True},
+        }
+
+    def get_role_names(self, obj):
+        return [role.name for role in obj.roles.all()]
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        roles = validated_data.pop('roles', [])
+        user = super().create(validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        if roles:
+            user.roles.set(roles)
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        roles = validated_data.pop('roles', None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        if roles is not None:
+            user.roles.set(roles)
+        return user
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    """
+    角色序列化器
+    """
+    menu_ids = serializers.PrimaryKeyRelatedField(
+        source='menus', many=True, queryset=Menu.objects.all(), required=False
+    )
+
+    class Meta:
+        model = Role
+        fields = '__all__'
+
+    def create(self, validated_data):
+        menus = validated_data.pop('menus', [])
+        role = super().create(validated_data)
+        if menus:
+            role.menus.set(menus)
+        return role
+
+    def update(self, instance, validated_data):
+        menus = validated_data.pop('menus', None)
+        role = super().update(instance, validated_data)
+        if menus is not None:
+            role.menus.set(menus)
+        return role
+
+
+class MenuSerializer(serializers.ModelSerializer):
+    """
+    菜单序列化器
+    """
+    children = serializers.SerializerMethodField(read_only=True)
+    parent_name = serializers.CharField(source='parent.title', read_only=True)
+
+    class Meta:
+        model = Menu
+        fields = '__all__'
+
+    def get_children(self, obj):
+        children = obj.children.filter(is_active=True)
+        if children.exists():
+            return MenuSerializer(children, many=True, context=self.context).data
+        return []
+
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    """
+    部门序列化器
+    """
+    children = serializers.SerializerMethodField(read_only=True)
+    parent_name = serializers.CharField(source='parent.name', read_only=True)
+
+    class Meta:
+        model = Department
+        fields = '__all__'
+
+    def get_children(self, obj):
+        children = obj.children.filter(is_active=True)
+        if children.exists():
+            return DepartmentSerializer(children, many=True, context=self.context).data
+        return []

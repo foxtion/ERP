@@ -1,0 +1,102 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { login as loginApi, getUserInfo } from '@/api/auth'
+
+/**
+ * 用户状态管理：Token、用户信息、登录/登出
+ */
+export const useUserStore = defineStore(
+  'user',
+  () => {
+    // ==================== State ====================
+    const token = ref(localStorage.getItem('erp_token') || '')
+    const userInfo = ref(null)
+    const menus = ref([])
+    const permissions = ref([])
+
+    // ==================== Getters ====================
+    const isLoggedIn = computed(() => !!token.value)
+
+    // ==================== Actions ====================
+    /**
+     * 用户登录
+     */
+    const login = async (credentials) => {
+      const res = await loginApi(credentials)
+      token.value = res.data.access
+      localStorage.setItem('erp_token', res.data.access)
+      // 同时存储refresh token
+      localStorage.setItem('erp_refresh_token', res.data.refresh)
+      // 缓存菜单和权限，供动态路由和按钮权限使用
+      menus.value = res.data.menus || []
+      permissions.value = res.data.permissions || []
+      userInfo.value = res.data.user
+      localStorage.setItem('erp_menus', JSON.stringify(menus.value))
+      localStorage.setItem('erp_permissions', JSON.stringify(permissions.value))
+      return res
+    }
+
+    /**
+     * 获取当前用户信息
+     */
+    const fetchUserInfo = async () => {
+      const res = await getUserInfo()
+      userInfo.value = res.data
+      return res
+    }
+
+    /**
+     * 从 localStorage 恢复登录状态（页面刷新时调用）
+     */
+    const restoreSession = () => {
+      const storedToken = localStorage.getItem('erp_token')
+      const storedMenus = localStorage.getItem('erp_menus')
+      const storedPerms = localStorage.getItem('erp_permissions')
+      if (storedToken) {
+        token.value = storedToken
+        menus.value = storedMenus ? JSON.parse(storedMenus) : []
+        permissions.value = storedPerms ? JSON.parse(storedPerms) : []
+      }
+    }
+
+    /**
+     * 登出：清除所有状态
+     */
+    const logout = () => {
+      token.value = ''
+      userInfo.value = null
+      menus.value = []
+      permissions.value = []
+      localStorage.removeItem('erp_token')
+      localStorage.removeItem('erp_refresh_token')
+      localStorage.removeItem('erp_menus')
+      localStorage.removeItem('erp_permissions')
+    }
+
+    /**
+     * 检查是否拥有某个权限标识
+     */
+    const hasPermission = (perm) => {
+      if (!perm) return true
+      // 超管默认拥有所有权限（后端也做了放行，这里前端做按钮级控制）
+      if (userInfo.value?.is_superuser) return true
+      return permissions.value.includes(perm)
+    }
+
+    return {
+      token,
+      userInfo,
+      menus,
+      permissions,
+      isLoggedIn,
+      login,
+      fetchUserInfo,
+      restoreSession,
+      logout,
+      hasPermission,
+    }
+  },
+  {
+    persist: false, // 我们手动用 localStorage 控制，更灵活
+  }
+)
