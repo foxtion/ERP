@@ -48,7 +48,7 @@ export const usePermissionStore = defineStore('permission', () => {
 function buildMenuTree(menus) {
   if (!menus || !menus.length) return []
   return menus
-    .filter((menu) => !menu.is_hidden)
+    .filter((menu) => !menu.is_hidden && menu.menu_type !== 'BUTTON')
     .map((menu) => {
       const item = {
         id: menu.id,

@@ -5,6 +5,10 @@ export function getUserList(params) {
   return request({ url: '/system/users/', method: 'get', params })
 }
 
+export function getUserDetail(id) {
+  return request({ url: `/system/users/${id}/`, method: 'get' })
+}
+
 export function createUser(data) {
   return request({ url: '/system/users/', method: 'post', data })
 }

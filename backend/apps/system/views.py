@@ -9,6 +9,7 @@ from apps.system.serializers import (
     UserSerializer, RoleSerializer, MenuSerializer, DepartmentSerializer
 )
 from apps.system.permissions import RBACPermission
+from apps.system.filters import UserFilter
 from utils.response import success_response, error_response
 
 User = get_user_model()
@@ -87,15 +88,53 @@ class UserInfoView(views.APIView):
         return success_response(data=serializer.data)
 
 
+# ==================== 统一包装响应格式的 Mixin ====================
+
+class CreateResponseMixin:
+    """
+    为 ListCreateAPIView 统一包装 create 响应格式
+    """
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return success_response(data=serializer.data, message='创建成功', code=200)
+
+
+class RUDResponseMixin:
+    """
+    为 RetrieveUpdateDestroyAPIView 统一包装 {code, message, data} 响应格式
+    """
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return success_response(data=serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return success_response(data=serializer.data, message='更新成功')
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return success_response(message='删除成功')
+
+
 # ==================== CRUD 视图类 ====================
 
-class UserListCreateView(generics.ListCreateAPIView):
+class UserListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     queryset = User.objects.all().order_by('-id')
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'system:user:view'
     search_fields = ['username', 'phone', 'email']
     ordering_fields = ['id', 'created_at']
+    filterset_class = UserFilter
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -103,7 +142,7 @@ class UserListCreateView(generics.ListCreateAPIView):
         return super().get_permissions()
 
 
-class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+class UserRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -119,7 +158,7 @@ class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         return super().get_permissions()
 
 
-class RoleListCreateView(generics.ListCreateAPIView):
+class RoleListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     queryset = Role.objects.all().order_by('-id')
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -132,7 +171,7 @@ class RoleListCreateView(generics.ListCreateAPIView):
         return super().get_permissions()
 
 
-class RoleRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+class RoleRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -173,7 +212,7 @@ class RoleMenuView(views.APIView):
             return error_response(message='角色不存在', code=404)
 
 
-class MenuListCreateView(generics.ListCreateAPIView):
+class MenuListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     queryset = Menu.objects.filter(is_active=True)
     serializer_class = MenuSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -214,7 +253,7 @@ class MenuAllFlatView(views.APIView):
         return success_response(data=data)
 
 
-class MenuRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+class MenuRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = Menu.objects.all()
     serializer_class = MenuSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -234,7 +273,7 @@ class MenuRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         instance.save()
 
 
-class DepartmentListCreateView(generics.ListCreateAPIView):
+class DepartmentListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     queryset = Department.objects.filter(is_active=True)
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -262,7 +301,7 @@ class DepartmentAllTreeView(views.APIView):
         return success_response(data=data)
 
 
-class DepartmentRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+class DepartmentRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
