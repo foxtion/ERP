@@ -26,6 +26,10 @@ export function getRoleList(params) {
   return request({ url: '/system/roles/', method: 'get', params })
 }
 
+export function getRoleDetail(id) {
+  return request({ url: `/system/roles/${id}/`, method: 'get' })
+}
+
 export function createRole(data) {
   return request({ url: '/system/roles/', method: 'post', data })
 }

@@ -63,8 +63,11 @@ router.beforeEach(async (to, from, next) => {
             router.addRoute(route)
           }
         })
-        // 重新导航，确保新路由生效
-        next({ ...to, replace: true })
+        // 重新导航，确保新路由生效（使用 path 避免 name 被解析为 NotFound）
+        next({ path: to.path, query: to.query, hash: to.hash, replace: true })
+      } else if (permissionStore.dynamicRoutes.length === 0 && userStore.menus.length === 0) {
+        // 有 Token 但没有菜单缓存，说明登录态异常，重定向到登录页
+        next({ path: '/login', query: { redirect: to.fullPath } })
       } else {
         next()
       }

@@ -1,9 +1,27 @@
 <template>
   <div class="page-container">
     <el-card>
+      <!-- 搜索筛选 -->
+      <el-form :model="query" inline class="search-form">
+        <el-form-item label="关键字">
+          <el-input
+            v-model="query.search"
+            placeholder="角色名称/编码"
+            clearable
+            style="width: 200px"
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-form-item>
+      </el-form>
+
       <div class="toolbar">
         <el-button v-permission="'system:role:add'" type="primary" @click="handleAdd">新增角色</el-button>
       </div>
+
       <el-table :data="tableData" border stripe>
         <el-table-column prop="name" label="角色名称" min-width="150" />
         <el-table-column prop="code" label="角色编码" min-width="150" />
@@ -31,19 +49,19 @@
     </el-card>
 
     <!-- 新增/编辑角色弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px" @closed="onDialogClosed">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="角色名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入角色名称" />
         </el-form-item>
         <el-form-item label="角色编码" prop="code">
-          <el-input v-model="form.code" placeholder="请输入角色编码" />
+          <el-input v-model="form.code" :disabled="isEdit" placeholder="请输入角色编码" />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="form.sort_order" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" rows="3" placeholder="请输入备注" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -78,7 +96,11 @@ import { getMenuFlat } from '@/api/system'
 
 const tableData = ref([])
 const total = ref(0)
-const query = ref({ page: 1, size: 10 })
+const query = ref({
+  page: 1,
+  size: 10,
+  search: '',
+})
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
@@ -106,7 +128,7 @@ const menuTreeData = ref([])
 const currentRoleId = ref(null)
 
 const fetchData = async () => {
-  const res = await getRoleList(query.value)
+  const res = await getRoleList({ ...query.value })
   tableData.value = res.data.list
   total.value = res.data.pagination.total
 }
@@ -121,10 +143,34 @@ onMounted(() => {
   fetchMenuTree()
 })
 
+const handleSearch = () => {
+  query.value.page = 1
+  fetchData()
+}
+
+const handleReset = () => {
+  query.value = {
+    page: 1,
+    size: 10,
+    search: '',
+  }
+  fetchData()
+}
+
 const resetForm = () => {
-  form.value = { name: '', code: '', sort_order: 0, remark: '' }
+  form.value = {
+    name: '',
+    code: '',
+    sort_order: 0,
+    remark: '',
+  }
   currentId.value = null
   isEdit.value = false
+}
+
+const onDialogClosed = () => {
+  formRef.value?.resetFields()
+  resetForm()
 }
 
 const handleAdd = () => {
@@ -149,23 +195,23 @@ const handleEdit = (row) => {
 
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    submitLoading.value = true
-    try {
-      if (isEdit.value) {
-        await updateRole(currentId.value, form.value)
-        ElMessage.success('更新成功')
-      } else {
-        await createRole(form.value)
-        ElMessage.success('新增成功')
-      }
-      dialogVisible.value = false
-      await fetchData()
-    } finally {
-      submitLoading.value = false
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  submitLoading.value = true
+  try {
+    if (isEdit.value) {
+      await updateRole(currentId.value, form.value)
+      ElMessage.success('更新成功')
+    } else {
+      await createRole(form.value)
+      ElMessage.success('新增成功')
     }
-  })
+    dialogVisible.value = false
+    await fetchData()
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 const handleDelete = (row) => {
@@ -179,12 +225,15 @@ const handleDelete = (row) => {
 const handleAssignMenu = async (row) => {
   currentRoleId.value = row.id
   menuDialogVisible.value = true
-  const res = await getRoleMenus(row.id)
-  const checkedKeys = res.data.menu_ids
-  // 确保DOM渲染完成后再设置选中
-  setTimeout(() => {
-    menuTreeRef.value?.setCheckedKeys(checkedKeys)
-  }, 100)
+  try {
+    const res = await getRoleMenus(row.id)
+    const checkedKeys = res.data.menu_ids
+    setTimeout(() => {
+      menuTreeRef.value?.setCheckedKeys(checkedKeys)
+    }, 100)
+  } catch {
+    // 错误已在拦截器中提示
+  }
 }
 
 const handleMenuSubmit = async () => {
@@ -206,6 +255,9 @@ const handleMenuSubmit = async () => {
 <style scoped>
 .page-container {
   padding: 20px;
+}
+.search-form {
+  margin-bottom: 15px;
 }
 .toolbar {
   margin-bottom: 15px;
