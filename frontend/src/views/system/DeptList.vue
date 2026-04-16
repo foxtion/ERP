@@ -1,6 +1,23 @@
 <template>
   <div class="page-container">
     <el-card>
+      <!-- 搜索筛选 -->
+      <el-form :model="query" inline class="search-form">
+        <el-form-item label="部门名称">
+          <el-input
+            v-model="query.search"
+            placeholder="请输入部门名称"
+            clearable
+            style="width: 200px"
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-form-item>
+      </el-form>
+
       <div class="toolbar">
         <el-button v-permission="'system:dept:add'" type="primary" @click="handleAdd">新增部门</el-button>
       </div>
@@ -13,6 +30,7 @@
       >
         <el-table-column prop="name" label="部门名称" min-width="180" />
         <el-table-column prop="code" label="部门编码" min-width="150" />
+        <el-table-column prop="user_count" label="人数" width="100" align="center" />
         <el-table-column prop="sort_order" label="排序" width="100" align="center" />
         <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
         <el-table-column label="操作" width="200" fixed="right">
@@ -65,6 +83,9 @@ import { getDeptList, getDeptTree, createDept, updateDept, deleteDept } from '@/
 
 const tableData = ref([])
 const treeData = ref([])
+const query = ref({
+  search: '',
+})
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const submitLoading = ref(false)
@@ -86,8 +107,12 @@ const rules = {
 }
 
 const fetchData = async () => {
-  const res = await getDeptList()
-  tableData.value = res.data
+  const params = {}
+  if (query.value.search) {
+    params.search = query.value.search
+  }
+  const res = await getDeptList(params)
+  tableData.value = res.data.list || res.data
 }
 
 const fetchTree = async () => {
@@ -99,6 +124,15 @@ onMounted(() => {
   fetchData()
   fetchTree()
 })
+
+const handleSearch = () => {
+  fetchData()
+}
+
+const handleReset = () => {
+  query.value.search = ''
+  fetchData()
+}
 
 const resetForm = () => {
   form.value = {
@@ -135,24 +169,23 @@ const handleEdit = (row) => {
 
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    submitLoading.value = true
-    try {
-      if (isEdit.value) {
-        await updateDept(currentId.value, form.value)
-        ElMessage.success('更新成功')
-      } else {
-        await createDept(form.value)
-        ElMessage.success('新增成功')
-      }
-      dialogVisible.value = false
-      await fetchData()
-      await fetchTree()
-    } finally {
-      submitLoading.value = false
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+  submitLoading.value = true
+  try {
+    if (isEdit.value) {
+      await updateDept(currentId.value, form.value)
+      ElMessage.success('更新成功')
+    } else {
+      await createDept(form.value)
+      ElMessage.success('新增成功')
     }
-  })
+    dialogVisible.value = false
+    await fetchData()
+    await fetchTree()
+  } finally {
+    submitLoading.value = false
+  }
 }
 
 const handleDelete = (row) => {
@@ -168,6 +201,9 @@ const handleDelete = (row) => {
 <style scoped>
 .page-container {
   padding: 20px;
+}
+.search-form {
+  margin-bottom: 15px;
 }
 .toolbar {
   margin-bottom: 15px;

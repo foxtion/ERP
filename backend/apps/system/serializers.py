@@ -102,6 +102,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
     """
     children = serializers.SerializerMethodField(read_only=True)
     parent_name = serializers.CharField(source='parent.name', read_only=True)
+    user_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Department
@@ -112,3 +113,12 @@ class DepartmentSerializer(serializers.ModelSerializer):
         if children.exists():
             return DepartmentSerializer(children, many=True, context=self.context).data
         return []
+
+    def get_user_count(self, obj):
+        return self._count_users(obj)
+
+    def _count_users(self, dept):
+        count = dept.user_set.filter(is_active=True).count()
+        for child in dept.children.filter(is_active=True):
+            count += self._count_users(child)
+        return count

@@ -278,6 +278,7 @@ class DepartmentListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'system:dept:view'
+    search_fields = ['name', 'code']
 
     def get_permissions(self):
         if self.request.method == 'POST':

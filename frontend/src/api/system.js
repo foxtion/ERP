@@ -76,8 +76,8 @@ export function deleteMenu(id) {
 }
 
 // ==================== 部门管理 ====================
-export function getDeptList() {
-  return request({ url: '/system/departments/', method: 'get' })
+export function getDeptList(params) {
+  return request({ url: '/system/departments/', method: 'get', params })
 }
 
 export function getDeptTree() {
