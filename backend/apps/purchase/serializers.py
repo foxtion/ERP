@@ -10,6 +10,23 @@ class SupplierSerializer(serializers.ModelSerializer):
         model = Supplier
         fields = '__all__'
 
+    def validate_code(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('供应商编码不能为空')
+        queryset = Supplier.objects.filter(code=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError('供应商编码已存在')
+        return value
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('供应商名称不能为空')
+        return value
+
 
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:

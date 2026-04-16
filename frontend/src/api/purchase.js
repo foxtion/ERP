@@ -13,6 +13,15 @@ export function updateSupplier(id, data) {
 export function deleteSupplier(id) {
   return request({ url: `/purchase/suppliers/${id}/`, method: 'delete' })
 }
+export function toggleSupplierStatus(id) {
+  return request({ url: `/purchase/suppliers/${id}/toggle_status/`, method: 'post' })
+}
+export function exportSuppliers(params) {
+  return request({ url: '/purchase/suppliers/export/', method: 'get', params, responseType: 'blob' })
+}
+export function importSuppliers(data) {
+  return request({ url: '/purchase/suppliers/import/', method: 'post', data })
+}
 
 // ==================== 采购申请 ====================
 export function getRequestList(params) {
