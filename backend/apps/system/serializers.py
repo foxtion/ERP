@@ -95,6 +95,35 @@ class MenuSerializer(serializers.ModelSerializer):
             return MenuSerializer(children, many=True, context=self.context).data
         return []
 
+    def validate(self, data):
+        menu_type = data.get('menu_type', self.instance.menu_type if self.instance else 'MENU')
+        path = data.get('path')
+        component = data.get('component')
+        permission = data.get('permission')
+
+        if menu_type == 'MENU':
+            if not path or not path.strip():
+                raise serializers.ValidationError({'path': '菜单类型的路由路径不能为空'})
+            if not component or not component.strip():
+                raise serializers.ValidationError({'component': '菜单类型的组件路径不能为空'})
+        elif menu_type == 'BUTTON':
+            if not permission or not permission.strip():
+                raise serializers.ValidationError({'permission': '按钮类型的权限标识不能为空'})
+
+        return data
+
+    def validate_parent(self, value):
+        if self.instance and value:
+            if value.id == self.instance.id:
+                raise serializers.ValidationError('上级菜单不能选择自己')
+            # 检查是否选择了自己的后代节点
+            parent = value.parent
+            while parent:
+                if parent.id == self.instance.id:
+                    raise serializers.ValidationError('上级菜单不能选择自己的子菜单')
+                parent = parent.parent
+        return value
+
 
 class DepartmentSerializer(serializers.ModelSerializer):
     """

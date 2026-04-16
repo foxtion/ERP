@@ -51,8 +51,8 @@ export function updateRoleMenus(roleId, data) {
 }
 
 // ==================== 菜单管理 ====================
-export function getMenuList() {
-  return request({ url: '/system/menus/', method: 'get' })
+export function getMenuList(params) {
+  return request({ url: '/system/menus/', method: 'get', params })
 }
 
 export function getMenuTree() {

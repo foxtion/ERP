@@ -271,6 +271,14 @@ class MenuRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdateDes
     def perform_destroy(self, instance):
         instance.is_active = False
         instance.save()
+        # 级联软删除所有子菜单
+        self._cascade_delete_children(instance)
+
+    def _cascade_delete_children(self, menu):
+        for child in menu.children.filter(is_active=True):
+            child.is_active = False
+            child.save()
+            self._cascade_delete_children(child)
 
 
 class DepartmentListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
