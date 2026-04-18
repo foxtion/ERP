@@ -6,11 +6,24 @@ class Customer(models.Model):
     """
     客户档案
     """
+    LEVEL_CHOICES = (
+        ('A', 'A级-VIP'),
+        ('B', 'B级-重要'),
+        ('C', 'C级-普通'),
+        ('D', 'D级-潜在'),
+    )
+
     name = models.CharField(max_length=128, verbose_name='客户名称')
     code = models.CharField(max_length=64, unique=True, verbose_name='客户编码')
     contact = models.CharField(max_length=64, blank=True, null=True, verbose_name='联系人')
     phone = models.CharField(max_length=32, blank=True, null=True, verbose_name='联系电话')
+    email = models.EmailField(max_length=128, blank=True, null=True, verbose_name='邮箱')
     address = models.CharField(max_length=255, blank=True, null=True, verbose_name='地址')
+    industry = models.CharField(max_length=64, blank=True, null=True, verbose_name='所属行业')
+    level = models.CharField(max_length=8, choices=LEVEL_CHOICES, default='C', verbose_name='客户等级')
+    credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name='信用额度')
+    tax_no = models.CharField(max_length=64, blank=True, null=True, verbose_name='统一社会信用代码')
+    bank_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='银行信息')
     is_active = models.BooleanField(default=True, verbose_name='是否启用')
     remark = models.TextField(blank=True, null=True, verbose_name='备注')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
@@ -38,7 +51,7 @@ class SalesOrder(models.Model):
         ('cancelled', '已取消'),
     )
 
-    order_no = models.CharField(max_length=64, unique=True, verbose_name='订单编号')
+    order_no = models.CharField(max_length=64, unique=True, blank=True, verbose_name='订单编号')
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name='客户')
     order_date = models.DateField(verbose_name='订单日期')
     delivery_date = models.DateField(blank=True, null=True, verbose_name='交货日期')

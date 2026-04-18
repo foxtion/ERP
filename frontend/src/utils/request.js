@@ -39,6 +39,10 @@ request.interceptors.request.use(
  */
 request.interceptors.response.use(
   (response) => {
+    // blob / arraybuffer 响应直接返回原始 response，不做 JSON 格式校验
+    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+      return response
+    }
     const res = response.data
     // 后端统一格式：{ code, message, data }
     if (res.code !== 200) {

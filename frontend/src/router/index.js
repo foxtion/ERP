@@ -24,6 +24,12 @@ export const constantRoutes = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '首页', icon: 'HomeFilled' },
       },
+      {
+        path: '/sales/customer-detail/:id',
+        name: 'CustomerDetail',
+        component: () => import('@/views/sales/CustomerDetail.vue'),
+        meta: { title: '客户详情', hidden: true },
+      },
     ],
   },
   {

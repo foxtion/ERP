@@ -100,6 +100,14 @@ class PurchaseOrder(models.Model):
 
     order_no = models.CharField(max_length=64, unique=True, verbose_name='订单编号')
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, verbose_name='供应商')
+    request = models.ForeignKey(
+        'PurchaseRequest',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name='来源申请单',
+        related_name='orders'
+    )
     order_date = models.DateField(verbose_name='订单日期')
     delivery_date = models.DateField(blank=True, null=True, verbose_name='交货日期')
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='draft', verbose_name='状态')

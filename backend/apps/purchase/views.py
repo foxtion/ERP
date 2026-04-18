@@ -274,6 +274,18 @@ class PurchaseOrderRetrieveUpdateDestroyView(RUDResponseMixin, generics.Retrieve
             self.required_permission = 'purchase:order:view'
         return super().get_permissions()
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != 'draft':
+            return error_response(message='只有草稿状态的订单可以编辑', code=400)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != 'draft':
+            return error_response(message='只有草稿状态的订单可以删除', code=400)
+        return super().destroy(request, *args, **kwargs)
+
 
 class PurchaseInStockListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     queryset = PurchaseInStock.objects.all().order_by('-id')
@@ -315,3 +327,193 @@ class PurchaseOrderOptionsView(views.APIView):
         queryset = PurchaseOrder.objects.filter(status__in=['draft', 'confirmed', 'partial']).order_by('-id')
         data = [{'id': o.id, 'order_no': o.order_no, 'supplier_name': o.supplier.name} for o in queryset]
         return success_response(data=data)
+
+
+class PurchaseOrderConfirmView(views.APIView):
+    """
+    确认采购订单：draft -> confirmed
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:order:edit'
+
+    def post(self, request, pk):
+        try:
+            order = PurchaseOrder.objects.get(pk=pk)
+        except PurchaseOrder.DoesNotExist:
+            return error_response(message='采购订单不存在', code=404)
+        if order.status != 'draft':
+            return error_response(message='只有草稿状态的订单可以确认', code=400)
+        order.status = 'confirmed'
+        order.save()
+        return success_response(data={'id': pk, 'status': order.status}, message='订单确认成功')
+
+
+class PurchaseOrderCancelView(views.APIView):
+    """
+    取消采购订单：draft/confirmed -> cancelled
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:order:edit'
+
+    def post(self, request, pk):
+        try:
+            order = PurchaseOrder.objects.get(pk=pk)
+        except PurchaseOrder.DoesNotExist:
+            return error_response(message='采购订单不存在', code=404)
+        if order.status not in ('draft', 'confirmed'):
+            return error_response(message='只有草稿或已确认状态的订单可以取消', code=400)
+        order.status = 'cancelled'
+        order.save()
+        return success_response(data={'id': pk, 'status': order.status}, message='订单取消成功')
+
+
+class PurchaseOrderCompleteView(views.APIView):
+    """
+    手动完成采购订单：confirmed/partial -> completed
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:order:edit'
+
+    def post(self, request, pk):
+        try:
+            order = PurchaseOrder.objects.get(pk=pk)
+        except PurchaseOrder.DoesNotExist:
+            return error_response(message='采购订单不存在', code=404)
+        if order.status not in ('confirmed', 'partial'):
+            return error_response(message='只有已确认或部分入库状态的订单可以手动完成', code=400)
+        order.status = 'completed'
+        order.save()
+        return success_response(data={'id': pk, 'status': order.status}, message='订单已完成')
+
+
+class PurchaseOrderExportView(views.APIView):
+    """
+    导出采购订单列表为 Excel（含明细）
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:order:view'
+
+    def get(self, request):
+        queryset = PurchaseOrder.objects.all().order_by('-id')
+        keyword = request.query_params.get('keyword')
+        status = request.query_params.get('status')
+        if keyword:
+            queryset = queryset.filter(order_no__icontains=keyword) | queryset.filter(supplier__name__icontains=keyword)
+        if status:
+            queryset = queryset.filter(status=status)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = '采购订单列表'
+
+        headers = ['订单编号', '供应商', '来源申请单', '订单日期', '交货日期', '状态', '总金额', '采购员', '备注']
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        status_map = dict(PurchaseOrder.STATUS_CHOICES)
+        for order in queryset:
+            ws.append([
+                order.order_no,
+                order.supplier.name if order.supplier else '',
+                order.request.request_no if order.request else '',
+                str(order.order_date) if order.order_date else '',
+                str(order.delivery_date) if order.delivery_date else '',
+                status_map.get(order.status, order.status),
+                float(order.total_amount) if order.total_amount else 0,
+                order.purchaser.username if order.purchaser else '',
+                order.remark or '',
+            ])
+
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        from django.http import HttpResponse
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="purchase_orders.xlsx"'
+        return response
+
+
+class PurchaseRequestConvertView(views.APIView):
+    """
+    将已批准的采购申请转为采购订单
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:order:add'
+
+    def post(self, request, pk):
+        try:
+            req = PurchaseRequest.objects.prefetch_related('items').get(pk=pk)
+        except PurchaseRequest.DoesNotExist:
+            return error_response(message='采购申请不存在', code=404)
+        if req.status != 'approved':
+            return error_response(message='只有已批准的申请单可以转采购订单', code=400)
+
+        data = request.data
+        order_no = data.get('order_no')
+        supplier_id = data.get('supplier')
+        order_date = data.get('order_date')
+        delivery_date = data.get('delivery_date')
+        remark = data.get('remark', '')
+
+        if not order_no or not supplier_id or not order_date:
+            return error_response(message='订单编号、供应商、订单日期为必填项', code=400)
+
+        from apps.purchase.models import Supplier, PurchaseOrder, PurchaseOrderItem
+        try:
+            supplier = Supplier.objects.get(pk=supplier_id)
+        except Supplier.DoesNotExist:
+            return error_response(message='供应商不存在', code=400)
+
+        if PurchaseOrder.objects.filter(order_no=order_no).exists():
+            return error_response(message='订单编号已存在', code=400)
+
+        order = PurchaseOrder.objects.create(
+            order_no=order_no,
+            supplier=supplier,
+            request=req,
+            order_date=order_date,
+            delivery_date=delivery_date or None,
+            remark=remark,
+            purchaser=request.user,
+            status='draft',
+        )
+
+        total = 0
+        for ri in req.items.all():
+            oi = PurchaseOrderItem.objects.create(
+                order=order,
+                material_name=ri.material_name,
+                spec=ri.spec,
+                quantity=ri.quantity,
+                unit=ri.unit,
+                price=ri.estimated_price,
+                remark=ri.remark,
+            )
+            total += oi.amount
+
+        order.total_amount = total
+        order.save()
+
+        req.status = 'ordered'
+        req.save()
+
+        serializer = PurchaseOrderSerializer(order)
+        return success_response(data=serializer.data, message='转单成功')

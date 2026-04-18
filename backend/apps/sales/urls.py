@@ -4,6 +4,9 @@ from apps.sales import views
 urlpatterns = [
     path('customers/', views.CustomerListCreateView.as_view(), name='customer_list'),
     path('customers/<int:pk>/', views.CustomerRetrieveUpdateDestroyView.as_view(), name='customer_detail'),
+    path('customers/<int:pk>/stats/', views.CustomerStatsView.as_view(), name='customer_stats'),
+    path('customers/<int:pk>/detail-stats/', views.CustomerDetailStatsView.as_view(), name='customer_detail_stats'),
+    path('customers/export/', views.CustomerExportView.as_view(), name='customer_export'),
     path('customers/options/', views.CustomerOptionsView.as_view(), name='customer_options'),
 
     path('orders/', views.SalesOrderListCreateView.as_view(), name='sales_order_list'),

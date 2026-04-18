@@ -13,6 +13,15 @@ export function updateCustomer(id, data) {
 export function deleteCustomer(id) {
   return request({ url: `/sales/customers/${id}/`, method: 'delete' })
 }
+export function getCustomerStats(id) {
+  return request({ url: `/sales/customers/${id}/stats/`, method: 'get' })
+}
+export function getCustomerDetailStats(id) {
+  return request({ url: `/sales/customers/${id}/detail-stats/`, method: 'get' })
+}
+export function exportCustomers(params) {
+  return request({ url: '/sales/customers/export/', method: 'get', params, responseType: 'blob' })
+}
 
 // ==================== 销售订单 ====================
 export function getSalesOrderList(params) {

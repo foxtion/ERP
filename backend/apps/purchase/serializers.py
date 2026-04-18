@@ -77,6 +77,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     items = PurchaseOrderItemSerializer(many=True, required=False)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     purchaser_name = serializers.CharField(source='purchaser.username', read_only=True)
+    request_no = serializers.CharField(source='request.request_no', read_only=True)
 
     class Meta:
         model = PurchaseOrder
@@ -111,6 +112,9 @@ class PurchaseInStockItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseInStockItem
         fields = '__all__'
+        extra_kwargs = {
+            'stock': {'read_only': True},
+        }
 
 
 class PurchaseInStockSerializer(serializers.ModelSerializer):
@@ -127,6 +131,7 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
         stock = PurchaseInStock.objects.create(**validated_data)
         for item_data in items_data:
             PurchaseInStockItem.objects.create(stock=stock, **item_data)
+        self._update_order_receipt(stock)
         return stock
 
     def update(self, instance, validated_data):
@@ -136,4 +141,38 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
             instance.items.all().delete()
             for item_data in items_data:
                 PurchaseInStockItem.objects.create(stock=instance, **item_data)
+        self._update_order_receipt(instance)
         return instance
+
+    def _update_order_receipt(self, stock):
+        """
+        入库后联动更新采购订单的已入库数量和状态
+        """
+        order = stock.order
+        if not order:
+            return
+        # 统计该订单下所有入库单的明细数量
+        from django.db.models import Sum
+        stock_items = {}
+        for s in order.purchaseinstock_set.all():
+            for item in s.items.all():
+                key = (item.material_name or '').strip()
+                if key:
+                    stock_items[key] = stock_items.get(key, 0) + (item.quantity or 0)
+        # 更新订单明细的 received_qty
+        all_completed = True
+        any_received = False
+        for oi in order.items.all():
+            received = stock_items.get((oi.material_name or '').strip(), 0)
+            oi.received_qty = received
+            oi.save()
+            if received > 0:
+                any_received = True
+            if (oi.quantity or 0) > received:
+                all_completed = False
+        # 更新订单状态
+        if all_completed and any_received:
+            order.status = 'completed'
+        elif any_received:
+            order.status = 'partial'
+        order.save()

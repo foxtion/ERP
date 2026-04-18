@@ -33,6 +33,7 @@ export const useUserStore = defineStore(
       userInfo.value = res.data.user
       localStorage.setItem('erp_menus', JSON.stringify(menus.value))
       localStorage.setItem('erp_permissions', JSON.stringify(permissions.value))
+      localStorage.setItem('erp_user_info', JSON.stringify(res.data.user))
       return res
     }
 
@@ -52,10 +53,12 @@ export const useUserStore = defineStore(
       const storedToken = localStorage.getItem('erp_token')
       const storedMenus = localStorage.getItem('erp_menus')
       const storedPerms = localStorage.getItem('erp_permissions')
+      const storedUserInfo = localStorage.getItem('erp_user_info')
       if (storedToken) {
         token.value = storedToken
         menus.value = storedMenus ? JSON.parse(storedMenus) : []
         permissions.value = storedPerms ? JSON.parse(storedPerms) : []
+        userInfo.value = storedUserInfo ? JSON.parse(storedUserInfo) : null
       }
     }
 
@@ -71,6 +74,7 @@ export const useUserStore = defineStore(
       localStorage.removeItem('erp_refresh_token')
       localStorage.removeItem('erp_menus')
       localStorage.removeItem('erp_permissions')
+      localStorage.removeItem('erp_user_info')
     }
 
     /**

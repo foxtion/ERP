@@ -3,6 +3,18 @@
     <el-card>
       <div class="toolbar">
         <el-button v-permission="'sales:order:add'" type="primary" @click="handleAdd">新增订单</el-button>
+        <div class="filter-bar">
+          <el-input v-model="query.search" placeholder="订单编号/客户名称" clearable style="width: 200px" @keyup.enter="fetchData" />
+          <el-select v-model="query.status" placeholder="订单状态" clearable style="width: 140px">
+            <el-option label="草稿" value="draft" />
+            <el-option label="已确认" value="confirmed" />
+            <el-option label="部分出库" value="partial" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="已取消" value="cancelled" />
+          </el-select>
+          <el-button type="primary" @click="fetchData">查询</el-button>
+          <el-button @click="resetQuery">重置</el-button>
+        </div>
       </div>
       <el-table :data="tableData" border stripe>
         <el-table-column prop="order_no" label="订单编号" min-width="150" />
@@ -125,7 +137,7 @@ import { getCustomerList } from '@/api/sales'
 
 const tableData = ref([])
 const total = ref(0)
-const query = ref({ page: 1, size: 10 })
+const query = ref({ page: 1, size: 10, search: '', status: '' })
 const customerList = ref([])
 
 const dialogVisible = ref(false)
@@ -170,8 +182,16 @@ const resetForm = () => {
   isEdit.value = false
 }
 
+const generateClientOrderNo = () => {
+  const now = new Date()
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
+  const rand = Math.floor(1000 + Math.random() * 9000)
+  return `SO${dateStr}${rand}`
+}
+
 const handleAdd = () => {
   resetForm()
+  form.value.order_no = generateClientOrderNo()
   dialogTitle.value = '新增销售订单'
   dialogVisible.value = true
 }
@@ -226,6 +246,11 @@ const handleSubmit = async () => {
   })
 }
 
+const resetQuery = () => {
+  query.value = { page: 1, size: 10, search: '', status: '' }
+  fetchData()
+}
+
 const handleDelete = (row) => {
   ElMessageBox.confirm(`确定删除订单 "${row.order_no}" 吗？`, '提示', { type: 'warning' }).then(async () => {
     await deleteSalesOrder(row.id)
@@ -237,7 +262,8 @@ const handleDelete = (row) => {
 
 <style scoped>
 .page-container { padding: 20px; }
-.toolbar { margin-bottom: 15px; }
+.toolbar { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+.filter-bar { display: flex; gap: 10px; align-items: center; }
 .pagination { margin-top: 15px; justify-content: flex-end; }
 .sub-title { font-weight: bold; margin: 15px 0 8px; }
 .add-row-btn { margin-top: 10px; }

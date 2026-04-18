@@ -15,10 +15,11 @@
         </el-table-column>
         <el-table-column prop="total_amount" label="总金额" width="120" align="right" />
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'purchase:request:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button v-permission="'purchase:request:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'purchase:order:add'" v-if="row.status === 'approved'" link type="success" @click="handleConvert(row)">转采购订单</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -99,13 +100,43 @@
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 转采购订单弹窗 -->
+    <el-dialog v-model="convertVisible" title="转采购订单" width="600px">
+      <el-form ref="convertFormRef" :model="convertForm" :rules="convertRules" label-width="100px">
+        <el-form-item label="申请单号">
+          <el-input v-model="convertForm.request_no" disabled />
+        </el-form-item>
+        <el-form-item label="订单编号" prop="order_no">
+          <el-input v-model="convertForm.order_no" placeholder="请输入采购订单编号" />
+        </el-form-item>
+        <el-form-item label="供应商" prop="supplier">
+          <el-select v-model="convertForm.supplier" placeholder="请选择供应商" filterable style="width: 100%">
+            <el-option v-for="s in supplierList" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="订单日期" prop="order_date">
+          <el-date-picker v-model="convertForm.order_date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="交货日期">
+          <el-date-picker v-model="convertForm.delivery_date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="convertForm.remark" type="textarea" rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="convertVisible = false">取消</el-button>
+        <el-button type="primary" :loading="convertLoading" @click="handleConvertSubmit">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getRequestList, createRequest, updateRequest, deleteRequest } from '@/api/purchase'
+import { getRequestList, createRequest, updateRequest, deleteRequest, convertRequestToOrder, getSupplierList } from '@/api/purchase'
 
 const tableData = ref([])
 const total = ref(0)
@@ -206,6 +237,59 @@ const handleDelete = (row) => {
     await deleteRequest(row.id)
     ElMessage.success('删除成功')
     await fetchData()
+  })
+}
+
+// 转采购订单
+const convertVisible = ref(false)
+const convertLoading = ref(false)
+const convertFormRef = ref(null)
+const supplierList = ref([])
+const convertForm = ref({
+  request_id: null,
+  request_no: '',
+  order_no: '',
+  supplier: null,
+  order_date: '',
+  delivery_date: '',
+  remark: '',
+})
+
+const convertRules = {
+  order_no: [{ required: true, message: '请输入订单编号', trigger: 'blur' }],
+  supplier: [{ required: true, message: '请选择供应商', trigger: 'change' }],
+  order_date: [{ required: true, message: '请选择订单日期', trigger: 'change' }],
+}
+
+const handleConvert = async (row) => {
+  convertForm.value = {
+    request_id: row.id,
+    request_no: row.request_no,
+    order_no: '',
+    supplier: null,
+    order_date: '',
+    delivery_date: '',
+    remark: row.remark || '',
+  }
+  const res = await getSupplierList({ size: 999 })
+  supplierList.value = res.data.list
+  convertVisible.value = true
+}
+
+const handleConvertSubmit = async () => {
+  if (!convertFormRef.value) return
+  await convertFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    convertLoading.value = true
+    try {
+      const { request_id, ...payload } = convertForm.value
+      await convertRequestToOrder(request_id, payload)
+      ElMessage.success('转采购订单成功')
+      convertVisible.value = false
+      await fetchData()
+    } finally {
+      convertLoading.value = false
+    }
   })
 }
 </script>

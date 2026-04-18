@@ -50,8 +50,25 @@ export function updateOrder(id, data) {
 export function deleteOrder(id) {
   return request({ url: `/purchase/orders/${id}/`, method: 'delete' })
 }
+export function confirmOrder(id) {
+  return request({ url: `/purchase/orders/${id}/confirm/`, method: 'post' })
+}
+export function cancelOrder(id) {
+  return request({ url: `/purchase/orders/${id}/cancel/`, method: 'post' })
+}
+export function completeOrder(id) {
+  return request({ url: `/purchase/orders/${id}/complete/`, method: 'post' })
+}
+export function exportOrders(params) {
+  return request({ url: '/purchase/orders/export/', method: 'get', params, responseType: 'blob' })
+}
 export function getOrderOptions() {
   return request({ url: '/purchase/orders/options/', method: 'get' })
+}
+
+// ==================== 采购申请转订单 ====================
+export function convertRequestToOrder(id, data) {
+  return request({ url: `/purchase/requests/${id}/convert_to_order/`, method: 'post', data })
 }
 
 // ==================== 采购入库 ====================
