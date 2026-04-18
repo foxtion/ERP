@@ -1,8 +1,56 @@
 from rest_framework import serializers
 from apps.inventory.models import (
     Warehouse, Inventory, StockTransfer, StockTransferItem,
-    InventoryCheck, InventoryCheckItem
+    InventoryCheck, InventoryCheckItem, WarehouseLocation, Material, StockWarning
 )
+
+
+class MaterialSerializer(serializers.ModelSerializer):
+    warning_status_display = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Material
+        fields = '__all__'
+        extra_kwargs = {
+            'code': {'validators': []},
+        }
+
+    def get_warning_status_display(self, obj):
+        return '预警' if obj.qty < obj.warning_threshold else '正常'
+
+    def create(self, validated_data):
+        code = validated_data.get('code')
+        existing = Material.objects.filter(code=code).first()
+        if existing:
+            # 已存在则累加数量，同时更新其他字段（如果有传）
+            add_qty = validated_data.get('qty', 0) or 0
+            existing.qty = (existing.qty or 0) + add_qty
+            if validated_data.get('name'):
+                existing.name = validated_data['name']
+            if validated_data.get('category'):
+                existing.category = validated_data['category']
+            if validated_data.get('unit'):
+                existing.unit = validated_data['unit']
+            if validated_data.get('spec') is not None:
+                existing.spec = validated_data['spec']
+            if validated_data.get('barcode') is not None:
+                existing.barcode = validated_data['barcode']
+            existing.save()
+            return existing
+        return super().create(validated_data)
+
+
+class StockWarningSerializer(serializers.ModelSerializer):
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    handler_name = serializers.CharField(source='handler.username', read_only=True)
+    status_display = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = StockWarning
+        fields = '__all__'
+
+    def get_status_display(self, obj):
+        return dict(StockWarning.STATUS_CHOICES).get(obj.status, obj.status)
 
 
 class WarehouseSerializer(serializers.ModelSerializer):
@@ -11,12 +59,37 @@ class WarehouseSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class WarehouseLocationSerializer(serializers.ModelSerializer):
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    status_display = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = WarehouseLocation
+        fields = '__all__'
+
+    def get_status_display(self, obj):
+        return '空位' if obj.is_empty else '有货'
+
+
 class InventorySerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    warning_status_display = serializers.SerializerMethodField(read_only=True)
+    material_code = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Inventory
         fields = '__all__'
+
+    def get_warning_status_display(self, obj):
+        return '预警' if obj.warning_status == 'warning' else '正常'
+
+    def get_material_code(self, obj):
+        from apps.inventory.models import Material
+        if not obj.material_name:
+            return ''
+        mat = Material.objects.filter(name=obj.material_name).first()
+        return mat.code if mat else ''
 
 
 class StockTransferItemSerializer(serializers.ModelSerializer):

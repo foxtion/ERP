@@ -60,6 +60,11 @@
         <el-descriptions-item label="所属行业">{{ baseInfo.industry || '-' }}</el-descriptions-item>
         <el-descriptions-item label="信用额度">{{ formatMoney(baseInfo.credit_limit) }}</el-descriptions-item>
         <el-descriptions-item label="统一社会信用代码">{{ baseInfo.tax_no || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="允许部分出货">
+          <el-tag :type="baseInfo.allow_partial_shipment ? 'success' : 'danger'" size="small">
+            {{ baseInfo.allow_partial_shipment ? '允许' : '不允许' }}
+          </el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="地址" :span="2">{{ baseInfo.address || '-' }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="baseInfo.is_active ? 'success' : 'info'" size="small">

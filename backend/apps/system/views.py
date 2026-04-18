@@ -85,7 +85,15 @@ class UserInfoView(views.APIView):
 
     def get(self, request):
         serializer = UserSerializer(request.user)
-        return success_response(data=serializer.data)
+        # 同时返回最新菜单和权限，解决刷新页面后菜单不同步的问题
+        login_view = LoginView()
+        menus = login_view._get_user_menus(request.user)
+        permissions = login_view._get_user_permissions(request.user)
+        return success_response(data={
+            **serializer.data,
+            'menus': menus,
+            'permissions': permissions,
+        })
 
 
 # ==================== 统一包装响应格式的 Mixin ====================

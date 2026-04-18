@@ -7,16 +7,23 @@ from apps.sales.models import (
 )
 
 
-def generate_order_no(prefix='SO'):
-    """自动生成订单编号：SO + 年月日 + 4位流水号"""
+def generate_order_no(prefix='SO', model=SalesOrder, field='order_no'):
+    """自动生成编号：prefix + 年月日 + 4位流水号
+    
+    Args:
+        prefix: 前缀，如 'SO'、'CK'
+        model: 查询的模型类，默认 SalesOrder
+        field: 编号字段名，默认 'order_no'
+    """
     today = datetime.date.today()
     date_str = today.strftime('%Y%m%d')
     like_str = f'{prefix}{date_str}'
     # 获取当天最大序号
-    latest = SalesOrder.objects.filter(order_no__startswith=like_str).order_by('-order_no').first()
+    latest = model.objects.filter(**{f'{field}__startswith': like_str}).order_by(f'-{field}').first()
     if latest:
         try:
-            seq = int(latest.order_no[len(like_str):]) + 1
+            no = getattr(latest, field)
+            seq = int(no[len(like_str):]) + 1
         except ValueError:
             seq = 1
     else:
@@ -71,6 +78,16 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
         }
 
 
+class SalesOrderItemCreateSerializer(serializers.ModelSerializer):
+    """
+    销售订单明细创建专用序列化器
+    支持传入 material_code
+    """
+    class Meta:
+        model = SalesOrderItem
+        fields = ['material_code', 'material_name', 'spec', 'quantity', 'unit', 'price', 'remark']
+
+
 class SalesOrderSerializer(serializers.ModelSerializer):
     items = SalesOrderItemSerializer(many=True, required=False)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
@@ -114,6 +131,9 @@ class SalesOutStockItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOutStockItem
         fields = '__all__'
+        extra_kwargs = {
+            'stock': {'read_only': True},
+        }
 
 
 class SalesOutStockSerializer(serializers.ModelSerializer):
@@ -124,13 +144,136 @@ class SalesOutStockSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesOutStock
         fields = '__all__'
+        extra_kwargs = {
+            'stock_no': {'required': False},
+        }
 
     def create(self, validated_data):
+        from decimal import Decimal
+        from apps.inventory.models import Inventory
+        from apps.sales.models import SalesOrderItem, SalesOrder, Customer
+
         items_data = validated_data.pop('items', [])
+        order = validated_data.get('order')
+        customer = order.customer if order else None
+
+        # 自动生成出库单号
+        if not validated_data.get('stock_no'):
+            validated_data['stock_no'] = generate_order_no('CK', model=SalesOutStock, field='stock_no')
+
         stock = SalesOutStock.objects.create(**validated_data)
+
         for item_data in items_data:
             SalesOutStockItem.objects.create(stock=stock, **item_data)
+
+            # 扣减库存台账
+            material_name = item_data.get('material_name')
+            spec = item_data.get('spec') or ''
+            out_qty = item_data.get('quantity') or Decimal('0')
+
+            if material_name and out_qty > 0:
+                inv = Inventory.objects.filter(
+                    material_name=material_name,
+                    spec=spec
+                ).first()
+                if inv:
+                    inv.qty = max(Decimal('0'), (inv.qty or Decimal('0')) - out_qty)
+                    inv.save()
+
+            # 更新销售订单明细的已出库数量
+            if order and material_name:
+                order_item = SalesOrderItem.objects.filter(
+                    order=order,
+                    material_name=material_name,
+                    spec=spec or ''
+                ).first()
+                if order_item:
+                    order_item.delivered_qty = (order_item.delivered_qty or Decimal('0')) + out_qty
+                    order_item.save()
+
+        # 更新销售订单状态 + 拆单处理
+        if order:
+            self._update_order_status(order, customer)
+
         return stock
+
+    def _update_order_status(self, order, customer=None):
+        from decimal import Decimal
+        from apps.sales.models import SalesOrderItem, SalesOrder
+
+        items = SalesOrderItem.objects.filter(order=order)
+        total_qty = Decimal('0')
+        total_delivered = Decimal('0')
+        has_remaining = False
+
+        for item in items:
+            qty = item.quantity or Decimal('0')
+            delivered = item.delivered_qty or Decimal('0')
+            total_qty += qty
+            total_delivered += delivered
+            if delivered < qty:
+                has_remaining = True
+
+        if total_delivered >= total_qty:
+            # 全部出库完成
+            order.status = 'completed'
+            order.save()
+        elif total_delivered > 0:
+            # 部分出库
+            if customer and customer.allow_partial_shipment:
+                # 允许部分出货：原订单标记完成，为未出库物料生成新订单
+                order.status = 'completed'
+                order.save()
+                self._split_order(order, items)
+            else:
+                # 不允许部分出货：保持 partial 状态
+                order.status = 'partial'
+                order.save()
+        else:
+            order.save()
+
+    def _split_order(self, order, items):
+        """
+        拆单：为未出库完成的物料生成新订单
+        """
+        from decimal import Decimal
+        from apps.sales.models import SalesOrder, SalesOrderItem
+
+        remaining_items = []
+        for item in items:
+            remaining = (item.quantity or Decimal('0')) - (item.delivered_qty or Decimal('0'))
+            if remaining > 0:
+                remaining_items.append({
+                    'material_code': item.material_code,
+                    'material_name': item.material_name,
+                    'spec': item.spec,
+                    'quantity': remaining,
+                    'unit': item.unit,
+                    'price': item.price,
+                    'remark': item.remark,
+                })
+
+        if not remaining_items:
+            return
+
+        new_order = SalesOrder.objects.create(
+            order_no=generate_order_no(),
+            customer=order.customer,
+            order_date=order.order_date,
+            delivery_date=order.delivery_date,
+            status='confirmed',
+            total_amount=0,
+            salesman=order.salesman,
+            remark=f'由订单 {order.order_no} 部分出库后自动拆单生成',
+        )
+
+        total = 0
+        for item_data in remaining_items:
+            item = SalesOrderItem.objects.create(order=new_order, **item_data)
+            total += item.amount
+
+        new_order.total_amount = total
+        new_order.save()
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)

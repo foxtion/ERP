@@ -45,7 +45,8 @@ request.interceptors.response.use(
     }
     const res = response.data
     // 后端统一格式：{ code, message, data }
-    if (res.code !== 200) {
+    // 兼容 DRF 默认格式（没有 code 字段时直接返回）
+    if (res.code !== undefined && !(res.code >= 200 && res.code < 300)) {
       ElMessage.error(res.message || '请求失败')
       return Promise.reject(new Error(res.message || '请求失败'))
     }
@@ -55,7 +56,16 @@ request.interceptors.response.use(
     const { response } = error
     if (response) {
       const status = response.status
-      const message = response.data?.message || '服务器异常'
+      let message = response.data?.message
+
+      // DRF 序列化器错误格式：{ field: [errors] }
+      if (!message && typeof response.data === 'object') {
+        const firstError = Object.values(response.data).flat()[0]
+        if (firstError) {
+          message = typeof firstError === 'string' ? firstError : firstError.detail || JSON.stringify(firstError)
+        }
+      }
+      if (!message) message = '服务器异常'
 
       if (status === 401) {
         ElMessage.error('登录已过期，请重新登录')

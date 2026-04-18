@@ -38,11 +38,20 @@ export const useUserStore = defineStore(
     }
 
     /**
-     * 获取当前用户信息
+     * 获取当前用户信息（同时刷新菜单和权限）
      */
     const fetchUserInfo = async () => {
       const res = await getUserInfo()
       userInfo.value = res.data
+      // 同步后端最新菜单和权限，解决新增菜单后刷新页面404的问题
+      if (res.data.menus) {
+        menus.value = res.data.menus
+        localStorage.setItem('erp_menus', JSON.stringify(res.data.menus))
+      }
+      if (res.data.permissions) {
+        permissions.value = res.data.permissions
+        localStorage.setItem('erp_permissions', JSON.stringify(res.data.permissions))
+      }
       return res
     }
 

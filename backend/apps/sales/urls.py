@@ -12,6 +12,8 @@ urlpatterns = [
     path('orders/', views.SalesOrderListCreateView.as_view(), name='sales_order_list'),
     path('orders/<int:pk>/', views.SalesOrderRetrieveUpdateDestroyView.as_view(), name='sales_order_detail'),
     path('orders/options/', views.SalesOrderOptionsView.as_view(), name='sales_order_options'),
+    path('orders/pending-outstock/', views.PendingOutStockOrderView.as_view(), name='pending_outstock_orders'),
+    path('orders/<int:pk>/outstock-items/', views.OrderOutStockItemsView.as_view(), name='order_outstock_items'),
 
     path('outstocks/', views.SalesOutStockListCreateView.as_view(), name='outstock_list'),
     path('outstocks/<int:pk>/', views.SalesOutStockRetrieveUpdateDestroyView.as_view(), name='outstock_detail'),

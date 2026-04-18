@@ -83,9 +83,31 @@
 
       <div class="sub-title">销售明细</div>
       <el-table :data="form.items" border size="small">
-        <el-table-column label="物料名称" min-width="140">
+        <el-table-column label="物料编码" min-width="120">
           <template #default="{ $index }">
-            <el-input v-model="form.items[$index].material_name" placeholder="物料名称" />
+            <el-input v-model="form.items[$index].material_code" placeholder="编码" disabled />
+          </template>
+        </el-table-column>
+        <el-table-column label="物料名称" min-width="180">
+          <template #default="{ $index }">
+            <el-select
+              v-model="form.items[$index].material_code"
+              filterable
+              remote
+              reserve-keyword
+              placeholder="搜索物料名称或编码"
+              :remote-method="(q) => searchMaterial(q, $index)"
+              :loading="materialLoading[$index]"
+              style="width: 100%"
+              @change="(val) => onMaterialSelect($index, val)"
+            >
+              <el-option
+                v-for="m in materialOptions[$index] || []"
+                :key="m.code"
+                :label="`${m.code} - ${m.name}`"
+                :value="m.code"
+              />
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="规格型号" min-width="120">
@@ -95,7 +117,7 @@
         </el-table-column>
         <el-table-column label="数量" width="100">
           <template #default="{ $index }">
-            <el-input-number v-model="form.items[$index].quantity" :min="0" :controls="false" style="width: 100%" />
+            <el-input-number v-model="form.items[$index].quantity" :min="0" :precision="0" :controls="false" style="width: 100%" />
           </template>
         </el-table-column>
         <el-table-column label="单位" width="70">
@@ -134,11 +156,14 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder } from '@/api/sales'
 import { getCustomerList } from '@/api/sales'
+import { getMaterialOptions } from '@/api/inventory'
 
 const tableData = ref([])
 const total = ref(0)
 const query = ref({ page: 1, size: 10, search: '', status: '' })
 const customerList = ref([])
+const materialOptions = ref({})
+const materialLoading = ref({})
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
@@ -207,13 +232,51 @@ const handleEdit = (row) => {
     order_date: row.order_date,
     delivery_date: row.delivery_date || '',
     remark: row.remark || '',
-    items: row.items ? row.items.map(i => ({ ...i })) : [],
+    items: row.items ? row.items.map((i, idx) => {
+      const item = { ...i }
+      // 编辑时预加载当前物料到 options，确保 select 能正确显示
+      if (item.material_code) {
+        materialOptions.value[idx] = [{
+          id: idx,
+          code: item.material_code,
+          name: item.material_name,
+          spec: item.spec,
+          unit: item.unit,
+        }]
+      }
+      return item
+    }) : [],
   }
   dialogVisible.value = true
 }
 
+const searchMaterial = async (query, index) => {
+  if (!query || query.length < 1) {
+    materialOptions.value[index] = []
+    return
+  }
+  materialLoading.value[index] = true
+  try {
+    const res = await getMaterialOptions({ search: query })
+    materialOptions.value[index] = res.data || []
+  } finally {
+    materialLoading.value[index] = false
+  }
+}
+
+const onMaterialSelect = (index, code) => {
+  const options = materialOptions.value[index] || []
+  const mat = options.find(m => m.code === code)
+  if (mat) {
+    form.value.items[index].material_code = mat.code
+    form.value.items[index].material_name = mat.name
+    form.value.items[index].spec = mat.spec
+    form.value.items[index].unit = mat.unit
+  }
+}
+
 const addItem = () => {
-  form.value.items.push({ material_name: '', spec: '', quantity: 1, unit: '件', price: 0, remark: '' })
+  form.value.items.push({ material_code: '', material_name: '', spec: '', quantity: 1, unit: '件', price: 0, remark: '' })
 }
 
 const removeItem = (index) => {

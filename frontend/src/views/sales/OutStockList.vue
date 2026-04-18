@@ -78,7 +78,7 @@
         </el-table-column>
         <el-table-column label="出库数量" width="110">
           <template #default="{ $index }">
-            <el-input-number v-model="form.items[$index].quantity" :min="0" :controls="false" style="width: 100%" />
+            <el-input-number v-model="form.items[$index].quantity" :min="0" :precision="0" :controls="false" style="width: 100%" />
           </template>
         </el-table-column>
         <el-table-column label="单位" width="80">

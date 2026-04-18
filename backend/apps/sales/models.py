@@ -24,6 +24,7 @@ class Customer(models.Model):
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name='信用额度')
     tax_no = models.CharField(max_length=64, blank=True, null=True, verbose_name='统一社会信用代码')
     bank_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='银行信息')
+    allow_partial_shipment = models.BooleanField(default=False, verbose_name='允许部分出货')
     is_active = models.BooleanField(default=True, verbose_name='是否启用')
     remark = models.TextField(blank=True, null=True, verbose_name='备注')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
@@ -83,6 +84,7 @@ class SalesOrderItem(models.Model):
     销售订单明细
     """
     order = models.ForeignKey(SalesOrder, on_delete=models.CASCADE, related_name='items', verbose_name='销售订单')
+    material_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='物料编码')
     material_name = models.CharField(max_length=128, verbose_name='物料名称')
     spec = models.CharField(max_length=128, blank=True, null=True, verbose_name='规格型号')
     quantity = models.DecimalField(max_digits=14, decimal_places=4, verbose_name='销售数量')

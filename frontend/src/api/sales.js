@@ -53,6 +53,12 @@ export function updateOutStock(id, data) {
 export function deleteOutStock(id) {
   return request({ url: `/sales/outstocks/${id}/`, method: 'delete' })
 }
+export function getPendingOutStockOrders() {
+  return request({ url: '/sales/orders/pending-outstock/', method: 'get' })
+}
+export function getOrderOutStockItems(id) {
+  return request({ url: `/sales/orders/${id}/outstock-items/`, method: 'get' })
+}
 
 // ==================== 销售退货 ====================
 export function getReturnList(params) {

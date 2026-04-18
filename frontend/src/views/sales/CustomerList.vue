@@ -31,6 +31,16 @@
             @keyup.enter="fetchData"
           />
           <el-select
+            v-model="query.allow_partial_shipment"
+            clearable
+            placeholder="部分出货"
+            style="width: 130px; margin-right: 10px"
+            @change="fetchData"
+          >
+            <el-option label="允许" :value="true" />
+            <el-option label="不允许" :value="false" />
+          </el-select>
+          <el-select
             v-model="query.is_active"
             clearable
             placeholder="状态"
@@ -63,6 +73,13 @@
           <template #default="{ row }">
             <el-tag :type="levelType(row.level)" size="small">
               {{ levelText(row.level) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="allow_partial_shipment" label="部分出货" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.allow_partial_shipment ? 'success' : 'danger'" size="small">
+              {{ row.allow_partial_shipment ? '允许' : '不允许' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -175,6 +192,16 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="允许部分出货">
+              <el-radio-group v-model="form.allow_partial_shipment">
+                <el-radio :label="true">允许</el-radio>
+                <el-radio :label="false">不允许</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
             <el-form-item label="状态">
               <el-radio-group v-model="form.is_active">
                 <el-radio :label="true">启用</el-radio>
@@ -221,6 +248,7 @@ const query = ref({
   search: '',
   level: null,
   industry: '',
+  allow_partial_shipment: null,
   is_active: null,
 })
 
@@ -282,6 +310,7 @@ const fetchData = async () => {
     if (!params.search) delete params.search
     if (!params.level) delete params.level
     if (!params.industry) delete params.industry
+    if (params.allow_partial_shipment === '' || params.allow_partial_shipment === null) delete params.allow_partial_shipment
     if (params.is_active === '' || params.is_active === null) delete params.is_active
     const res = await getCustomerList(params)
     tableData.value = res.data.list
@@ -316,6 +345,7 @@ const handleReset = () => {
     search: '',
     level: null,
     industry: '',
+    allow_partial_shipment: null,
     is_active: null,
   }
   fetchData()
@@ -340,6 +370,7 @@ const resetForm = () => {
     industry: '',
     level: 'C',
     credit_limit: 0,
+    allow_partial_shipment: false,
     tax_no: '',
     bank_info: '',
     is_active: true,
@@ -370,6 +401,7 @@ const handleEdit = (row) => {
     industry: row.industry || '',
     level: row.level || 'C',
     credit_limit: row.credit_limit || 0,
+    allow_partial_shipment: row.allow_partial_shipment || false,
     tax_no: row.tax_no || '',
     bank_info: row.bank_info || '',
     is_active: row.is_active,
@@ -423,6 +455,7 @@ const handleExport = async () => {
     if (!params.search) delete params.search
     if (!params.level) delete params.level
     if (!params.industry) delete params.industry
+    if (params.allow_partial_shipment === '' || params.allow_partial_shipment === null) delete params.allow_partial_shipment
     if (params.is_active === '' || params.is_active === null) delete params.is_active
 
     const res = await exportCustomers(params)

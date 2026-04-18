@@ -22,7 +22,7 @@ class CustomerListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'sales:customer:view'
     search_fields = ['name', 'code', 'contact', 'phone', 'email', 'industry']
-    filterset_fields = ['is_active', 'level', 'industry']
+    filterset_fields = ['is_active', 'level', 'industry', 'allow_partial_shipment']
 
     def get_serializer_class(self):
         if self.request.method == 'GET':
@@ -294,6 +294,93 @@ class SalesOrderOptionsView(views.APIView):
         return success_response(data=data)
 
 
+class PendingOutStockOrderView(views.APIView):
+    """
+    待出库订单列表（收货员作业用）
+    返回状态为 confirmed 或 partial 的订单
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'sales:outstock:view'
+
+    def get(self, request):
+        from apps.inventory.models import Inventory
+        queryset = SalesOrder.objects.filter(status__in=['confirmed', 'partial']).order_by('-id')
+        data = []
+        for order in queryset:
+            items = []
+            for item in order.items.all():
+                remaining = (item.quantity or 0) - (item.delivered_qty or 0)
+                if remaining <= 0:
+                    continue
+                inv = Inventory.objects.filter(material_name=item.material_name, spec=item.spec or '').first()
+                stock_qty = inv.qty if inv else 0
+                items.append({
+                    'id': item.id,
+                    'material_code': item.material_code or '',
+                    'material_name': item.material_name,
+                    'spec': item.spec,
+                    'quantity': str(item.quantity),
+                    'delivered_qty': str(item.delivered_qty),
+                    'remaining': str(remaining),
+                    'unit': item.unit,
+                    'stock_qty': str(stock_qty),
+                })
+            if items:
+                data.append({
+                    'id': order.id,
+                    'order_no': order.order_no,
+                    'customer_name': order.customer.name,
+                    'customer_id': order.customer.id,
+                    'allow_partial_shipment': order.customer.allow_partial_shipment,
+                    'order_date': order.order_date,
+                    'status': order.status,
+                    'status_display': order.get_status_display(),
+                    'items': items,
+                })
+        return success_response(data=data)
+
+
+class OrderOutStockItemsView(views.APIView):
+    """
+    获取单个订单的可出库明细
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'sales:outstock:view'
+
+    def get(self, request, pk):
+        from apps.inventory.models import Inventory
+        try:
+            order = SalesOrder.objects.get(pk=pk)
+        except SalesOrder.DoesNotExist:
+            return error_response(message='订单不存在', code=404)
+
+        items = []
+        for item in order.items.all():
+            remaining = (item.quantity or 0) - (item.delivered_qty or 0)
+            inv = Inventory.objects.filter(material_name=item.material_name, spec=item.spec or '').first()
+            stock_qty = inv.qty if inv else 0
+            items.append({
+                'id': item.id,
+                'material_code': item.material_code or '',
+                'material_name': item.material_name,
+                'spec': item.spec,
+                'quantity': str(item.quantity),
+                'delivered_qty': str(item.delivered_qty),
+                'remaining': str(remaining),
+                'unit': item.unit,
+                'stock_qty': str(stock_qty),
+            })
+
+        return success_response(data={
+            'id': order.id,
+            'order_no': order.order_no,
+            'customer_name': order.customer.name,
+            'customer_id': order.customer.id,
+            'allow_partial_shipment': order.customer.allow_partial_shipment,
+            'items': items,
+        })
+
+
 class SalesOutStockListCreateView(generics.ListCreateAPIView):
     queryset = SalesOutStock.objects.all().order_by('-id')
     serializer_class = SalesOutStockSerializer
@@ -305,6 +392,13 @@ class SalesOutStockListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'POST':
             self.required_permission = 'sales:outstock:add'
         return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return success_response(data=serializer.data, message='出库成功', code=201)
 
 
 class SalesOutStockRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):

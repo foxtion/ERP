@@ -8,6 +8,7 @@ import App from './App.vue'
 import router from './router'
 import { permissionDirective } from './utils/directives'
 import { useUserStore } from './store/user'
+import { usePermissionStore } from './store/permission'
 
 const app = createApp(App)
 
@@ -18,9 +19,30 @@ app.use(createPinia())
 
 // 应用启动时恢复用户登录状态（从 localStorage 读取 Token）
 const userStore = useUserStore()
+const permissionStore = usePermissionStore()
 userStore.restoreSession()
 
-app.use(router)
-app.use(ElementPlus)
+// 如果已登录，自动刷新用户信息和菜单权限（解决新增菜单后刷新页面404的问题）
+async function initApp() {
+  if (userStore.isLoggedIn) {
+    try {
+      await userStore.fetchUserInfo()
+      // fetchUserInfo 完成后，用最新菜单重新生成路由和侧边栏
+      if (userStore.menus.length > 0) {
+        const accessRoutes = permissionStore.generateRoutes(userStore.menus)
+        accessRoutes.forEach((route) => {
+          if (!router.hasRoute(route.name)) {
+            router.addRoute(route)
+          }
+        })
+      }
+    } catch (e) {
+      console.error('fetchUserInfo failed:', e)
+    }
+  }
+  app.use(router)
+  app.use(ElementPlus)
+  app.mount('#app')
+}
 
-app.mount('#app')
+initApp()

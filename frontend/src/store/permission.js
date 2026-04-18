@@ -7,6 +7,18 @@ import { ref } from 'vue'
  */
 const viewModules = import.meta.glob('@/views/**/*.vue')
 
+// 显式导入：解决 Vite import.meta.glob 偶尔不识别新文件的问题
+const explicitModules = {
+  'sales/OutStockJob': () => import('@/views/sales/OutStockJob.vue'),
+  'sales/OutStockList': () => import('@/views/sales/OutStockList.vue'),
+}
+
+// 启动时打印 glob 扫描结果，方便调试
+const allKeys = Object.keys(viewModules)
+console.log('[permission.js] import.meta.glob keys count:', allKeys.length)
+const hasOutStockJob = allKeys.some(k => k.includes('OutStockJob'))
+console.log('[permission.js] OutStockJob in glob?', hasOutStockJob)
+
 /**
  * 权限路由状态管理：负责将后端返回的菜单树转换为前端动态路由
  */
@@ -125,7 +137,38 @@ function loadComponent(componentPath) {
   if (path.endsWith('.vue')) {
     path = path.slice(0, -4)
   }
-  const key = `/src/views/${path}.vue`
-  // 如果找不到对应组件，回退到 dashboard
-  return viewModules[key] || viewModules['/src/views/dashboard/index.vue']
+
+  // 尝试多种路径格式（兼容不同系统和 Vite 版本）
+  const candidateKeys = [
+    `/src/views/${path}.vue`,
+    `src/views/${path}.vue`,
+    `./src/views/${path}.vue`,
+    `../src/views/${path}.vue`,
+    `../../src/views/${path}.vue`,
+    `/views/${path}.vue`,
+  ]
+
+  for (const key of candidateKeys) {
+    if (viewModules[key]) {
+      return viewModules[key]
+    }
+  }
+
+  // 模糊匹配：遍历所有 key，找包含目标路径的
+  for (const [key, value] of Object.entries(viewModules)) {
+    const normalizedKey = key.replace(/\\/g, '/')
+    if (normalizedKey.includes(`${path}.vue`)) {
+      return value
+    }
+  }
+
+  // 尝试显式导入 fallback
+  if (explicitModules[path]) {
+    console.log(`[loadComponent] 使用显式导入: ${path}`)
+    return explicitModules[path]
+  }
+
+  console.warn(`[loadComponent] 未找到组件: ${componentPath}，已回退到 dashboard`)
+  console.warn('[loadComponent] 可用 keys:', Object.keys(viewModules).slice(0, 20))
+  return viewModules['/src/views/dashboard/index.vue']
 }
