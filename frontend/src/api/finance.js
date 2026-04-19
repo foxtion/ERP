@@ -30,6 +30,15 @@ export function updateVoucher(id, data) {
 export function deleteVoucher(id) {
   return request({ url: `/finance/vouchers/${id}/`, method: 'delete' })
 }
+export function auditVoucher(id) {
+  return request({ url: `/finance/vouchers/${id}/audit/`, method: 'post' })
+}
+export function cancelAuditVoucher(id) {
+  return request({ url: `/finance/vouchers/${id}/cancel_audit/`, method: 'post' })
+}
+export function generateVoucherNo() {
+  return request({ url: '/finance/vouchers/generate_no/', method: 'get' })
+}
 
 // ==================== 应收应付 ====================
 export function getReceivableList(params) {
@@ -44,6 +53,9 @@ export function updateReceivable(id, data) {
 export function deleteReceivable(id) {
   return request({ url: `/finance/receivables/${id}/`, method: 'delete' })
 }
+export function getOverdueReceivables(params) {
+  return request({ url: '/finance/receivables/overdue/', method: 'get', params })
+}
 
 // ==================== 收款付款 ====================
 export function getPaymentList(params) {
@@ -57,6 +69,28 @@ export function updatePayment(id, data) {
 }
 export function deletePayment(id) {
   return request({ url: `/finance/payments/${id}/`, method: 'delete' })
+}
+
+// ==================== 核销明细 ====================
+export function getSettlementList(params) {
+  return request({ url: '/finance/settlements/', method: 'get', params })
+}
+export function createSettlement(data) {
+  return request({ url: '/finance/settlements/', method: 'post', data })
+}
+export function deleteSettlement(id) {
+  return request({ url: `/finance/settlements/${id}/`, method: 'delete' })
+}
+export function settlePayment(id, data) {
+  return request({ url: `/finance/payments/${id}/settle/`, method: 'post', data })
+}
+export function cancelSettlement(id) {
+  return request({ url: `/finance/settlements/${id}/cancel/`, method: 'post' })
+}
+
+// ==================== 对账单 ====================
+export function getStatement(params) {
+  return request({ url: '/finance/statement/', method: 'get', params })
 }
 
 // ==================== 财务汇总 ====================
