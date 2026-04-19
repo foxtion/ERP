@@ -44,6 +44,38 @@ class Inventory(models.Model):
         ordering = ['-id']
         unique_together = [['warehouse', 'material_name', 'spec']]
 
+    def save(self, *args, **kwargs):
+        # 根据物料档案的预警阈值自动更新预警状态
+        mat = Material.objects.filter(name=self.material_name).first()
+        threshold = mat.warning_threshold if mat else 50
+        if self.qty <= threshold:
+            self.warning_status = 'warning'
+        else:
+            self.warning_status = 'normal'
+        super().save(*args, **kwargs)
+        # 同步 StockWarning 记录
+        self._sync_stock_warning(mat, threshold)
+
+    def _sync_stock_warning(self, mat, threshold):
+        if self.warning_status == 'warning':
+            status = 'urgent' if self.qty == 0 else 'warning'
+            StockWarning.objects.update_or_create(
+                warehouse=self.warehouse,
+                material_name=self.material_name,
+                defaults={
+                    'material': mat,
+                    'current_qty': self.qty,
+                    'threshold': threshold,
+                    'status': status,
+                    'is_handled': False,
+                }
+            )
+        else:
+            StockWarning.objects.filter(
+                warehouse=self.warehouse,
+                material_name=self.material_name
+            ).delete()
+
     def __str__(self):
         return f"{self.material_name}@{self.warehouse.name}"
 

@@ -40,6 +40,7 @@
       </div>
 
       <el-table :data="tableData" border stripe>
+        <el-table-column prop="material_code" label="物料编码" min-width="140" />
         <el-table-column prop="material_name" label="物料名称" min-width="180" />
         <el-table-column prop="warehouse_name" label="仓库" min-width="120" />
         <el-table-column prop="current_qty" label="当前数量" width="110" align="right">

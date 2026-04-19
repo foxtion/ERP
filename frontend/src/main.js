@@ -38,6 +38,14 @@ async function initApp() {
       }
     } catch (e) {
       console.error('fetchUserInfo failed:', e)
+      // 401 时响应拦截器已清理状态并准备跳转登录页，这里不再继续挂载主应用
+      // 避免页面闪烁或已登出状态仍显示登录后的布局
+      if (e.response?.status === 401) {
+        app.use(router)
+        app.use(ElementPlus)
+        app.mount('#app')
+        return
+      }
     }
   }
   app.use(router)

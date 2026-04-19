@@ -223,12 +223,18 @@ def main():
         mat.qty = total
         mat.save(update_fields=['qty'])
 
+    # 同步库存预警状态
+    print('>>> 同步库存预警状态...')
+    for inv in Inventory.objects.all():
+        inv.save()
+
     print('\n>>> 导入完成!')
     print(f'  物料档案: {Material.objects.count()}')
     print(f'  库位记录: {WarehouseLocation.objects.count()}')
     print(f'  库存台账: {Inventory.objects.count()}')
     print(f'  有货库位: {WarehouseLocation.objects.filter(is_empty=False).count()}')
     print(f'  空位库位: {WarehouseLocation.objects.filter(is_empty=True).count()}')
+    print(f'  预警记录: {StockWarning.objects.count()}')
 
 
 if __name__ == '__main__':

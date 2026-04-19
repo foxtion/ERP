@@ -52,7 +52,7 @@
         <el-table-column prop="unit" label="单位" width="80" align="center" />
         <el-table-column prop="qty" label="库存数量" width="120" align="right" sortable>
           <template #default="{ row }">
-            <el-tag :type="qtyTagType(row.qty)">{{ Number(row.qty).toFixed(0) }}</el-tag>
+            <el-tag :type="qtyTagType(row.qty, row.warning_status)">{{ Number(row.qty).toFixed(0) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="warning_status_display" label="预警状态" width="100" align="center">
@@ -129,9 +129,10 @@ const fetchWarehouses = async () => {
   warehouseOptions.value = res.data
 }
 
-const qtyTagType = (qty) => {
+const qtyTagType = (qty, warningStatus) => {
   const q = Number(qty)
   if (q === 0) return 'danger'
+  if (warningStatus === 'warning' || q <= 50) return 'warning'
   if (q < 10) return 'warning'
   return 'success'
 }

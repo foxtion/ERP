@@ -16,7 +16,7 @@ class MaterialSerializer(serializers.ModelSerializer):
         }
 
     def get_warning_status_display(self, obj):
-        return '预警' if obj.qty < obj.warning_threshold else '正常'
+        return '预警' if obj.qty <= obj.warning_threshold else '正常'
 
     def create(self, validated_data):
         code = validated_data.get('code')
@@ -44,6 +44,7 @@ class StockWarningSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     handler_name = serializers.CharField(source='handler.username', read_only=True)
     status_display = serializers.SerializerMethodField(read_only=True)
+    material_code = serializers.CharField(source='material.code', read_only=True, default='')
 
     class Meta:
         model = StockWarning
@@ -82,7 +83,10 @@ class InventorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_warning_status_display(self, obj):
-        return '预警' if obj.warning_status == 'warning' else '正常'
+        from apps.inventory.models import Material
+        mat = Material.objects.filter(name=obj.material_name).first()
+        threshold = mat.warning_threshold if mat else 50
+        return '预警' if obj.qty <= threshold else '正常'
 
     def get_material_code(self, obj):
         from apps.inventory.models import Material

@@ -73,7 +73,7 @@ class InventoryListView(generics.ListAPIView):
         # 自动更新预警状态
         warning = self.request.query_params.get('warning')
         if warning == 'true':
-            queryset = queryset.filter(qty__lt=50)
+            queryset = queryset.filter(qty__lte=50)
         # 支持按物料编码搜索
         search = self.request.query_params.get('search')
         if search:

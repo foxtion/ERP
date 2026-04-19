@@ -37,7 +37,7 @@
         </el-table-column>
         <el-table-column prop="warning_status_display" label="预警状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag v-if="Number(row.qty) < Number(row.warning_threshold)" type="danger">预警</el-tag>
+            <el-tag v-if="Number(row.qty) <= Number(row.warning_threshold)" type="danger">预警</el-tag>
             <el-tag v-else type="success">正常</el-tag>
           </template>
         </el-table-column>
