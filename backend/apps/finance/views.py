@@ -4,15 +4,22 @@ from apps.system.permissions import RBACPermission
 from utils.response import success_response, error_response
 from django.db.models import Sum, Q, F
 from django.db import transaction
+from decimal import Decimal
 from django.utils import timezone
 from datetime import date
 
-from apps.finance.models import AccountSubject, Voucher, ReceivablePayable, PaymentReceipt, Settlement
+from apps.finance.models import (
+    AccountSubject, Voucher, Counterparty,
+    ReceivablePayable, PaymentReceipt, Settlement
+)
 from apps.finance.serializers import (
     AccountSubjectSerializer, VoucherSerializer,
+    CounterpartySerializer, CounterpartyOptionSerializer,
     ReceivablePayableSerializer, PaymentReceiptSerializer, SettlementSerializer
 )
 
+
+# ==================== 会计科目 ====================
 
 class AccountSubjectListCreateView(generics.ListCreateAPIView):
     queryset = AccountSubject.objects.filter(is_active=True)
@@ -31,9 +38,6 @@ class AccountSubjectListCreateView(generics.ListCreateAPIView):
 
 
 class AccountSubjectAllFlatView(views.APIView):
-    """
-    获取所有科目的平铺列表（用于凭证明细选择）
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:subject:view'
 
@@ -62,6 +66,8 @@ class AccountSubjectRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIV
         instance.is_active = False
         instance.save()
 
+
+# ==================== 记账凭证 ====================
 
 class VoucherListCreateView(generics.ListCreateAPIView):
     queryset = Voucher.objects.all().order_by('-id')
@@ -104,10 +110,6 @@ class VoucherRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class VoucherAuditView(views.APIView):
-    """
-    审核凭证
-    POST /vouchers/<id>/audit/
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:voucher:edit'
 
@@ -122,7 +124,6 @@ class VoucherAuditView(views.APIView):
         if voucher.status == 'cancelled':
             return error_response(message='已作废的凭证不能审核', code=400)
 
-        # 校验借贷平衡
         if voucher.total_debit != voucher.total_credit:
             return error_response(message='借贷不平衡，不能审核', code=400)
         if voucher.total_debit == 0:
@@ -140,10 +141,6 @@ class VoucherAuditView(views.APIView):
 
 
 class VoucherCancelAuditView(views.APIView):
-    """
-    取消审核（反审核）
-    POST /vouchers/<id>/cancel_audit/
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:voucher:edit'
 
@@ -168,11 +165,6 @@ class VoucherCancelAuditView(views.APIView):
 
 
 class VoucherGenerateNoView(views.APIView):
-    """
-    自动生成凭证号
-    GET /vouchers/generate_no/
-    返回格式: PZ20260419-001
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:voucher:add'
 
@@ -180,7 +172,6 @@ class VoucherGenerateNoView(views.APIView):
         from datetime import datetime
         date_str = datetime.now().strftime('%Y%m%d')
         prefix = f'PZ{date_str}'
-        # 查找当天最大的序号
         existing = Voucher.objects.filter(voucher_no__startswith=prefix).order_by('-voucher_no').first()
         if existing:
             try:
@@ -190,6 +181,95 @@ class VoucherGenerateNoView(views.APIView):
         else:
             seq = 1
         return success_response(data={'voucher_no': f'{prefix}-{seq:03d}'})
+
+
+# ==================== 往来单位 ====================
+
+class CounterpartyListCreateView(generics.ListCreateAPIView):
+    queryset = Counterparty.objects.filter(is_active=True).order_by('-id')
+    serializer_class = CounterpartySerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'finance:receivable:view'
+    search_fields = ['name', 'contact', 'phone']
+    filterset_fields = ['type']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            self.required_permission = 'finance:receivable:edit'
+        return super().get_permissions()
+
+
+class CounterpartyRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Counterparty.objects.all()
+    serializer_class = CounterpartySerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+
+    def get_permissions(self):
+        method = self.request.method
+        if method in ('PUT', 'PATCH'):
+            self.required_permission = 'finance:receivable:edit'
+        elif method == 'DELETE':
+            self.required_permission = 'finance:receivable:delete'
+        else:
+            self.required_permission = 'finance:receivable:view'
+        return super().get_permissions()
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save()
+
+
+class CounterpartyOptionView(views.APIView):
+    """获取往来单位下拉选项"""
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'finance:receivable:view'
+
+    def get(self, request):
+        queryset = Counterparty.objects.filter(is_active=True).order_by('name')
+        data = CounterpartyOptionSerializer(queryset, many=True).data
+        return success_response(data=data)
+
+
+class CounterpartyStatsView(views.APIView):
+    """往来单位统计：Top 欠款/应付款单位"""
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'finance:receivable:view'
+
+    def get(self, request):
+        # 按往来单位统计应收未结
+        receivable_stats = []
+        rp_qs = ReceivablePayable.objects.filter(
+            doc_type='receivable'
+        ).exclude(status='paid').values('counterparty').annotate(
+            total=Sum('amount'),
+            paid=Sum('paid_amount')
+        ).order_by('-total')[:10]
+        for d in rp_qs:
+            receivable_stats.append({
+                'counterparty': d['counterparty'],
+                'total': float(d['total'] or 0),
+                'unpaid': float((d['total'] or 0) - (d['paid'] or 0)),
+            })
+
+        # 按往来单位统计应付未结
+        payable_stats = []
+        py_qs = ReceivablePayable.objects.filter(
+            doc_type='payable'
+        ).exclude(status='paid').values('counterparty').annotate(
+            total=Sum('amount'),
+            paid=Sum('paid_amount')
+        ).order_by('-total')[:10]
+        for d in py_qs:
+            payable_stats.append({
+                'counterparty': d['counterparty'],
+                'total': float(d['total'] or 0),
+                'unpaid': float((d['total'] or 0) - (d['paid'] or 0)),
+            })
+
+        return success_response(data={
+            'receivable_top': receivable_stats,
+            'payable_top': payable_stats,
+        })
 
 
 # ==================== 应收应付 ====================
@@ -209,7 +289,6 @@ class ReceivablePayableListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # 日期范围筛选
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
         due_date_from = self.request.query_params.get('due_date_from')
@@ -222,11 +301,9 @@ class ReceivablePayableListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(due_date__gte=due_date_from)
         if due_date_to:
             queryset = queryset.filter(due_date__lte=due_date_to)
-        # 状态多选
         status_in = self.request.query_params.get('status__in')
         if status_in:
             queryset = queryset.filter(status__in=status_in.split(','))
-        # 逾期筛选
         overdue = self.request.query_params.get('overdue')
         if overdue == '1':
             queryset = queryset.filter(due_date__lt=date.today()).exclude(status='paid')
@@ -311,14 +388,6 @@ class SettlementRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
 # ==================== 核销操作 ====================
 
 class PaymentSettleView(views.APIView):
-    """
-    收付款核销：将一笔收付款单与应收应付单进行核销
-    POST /payments/<id>/settle/
-    {
-        "receivable_id": 1,
-        "amount": 500.00
-    }
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:payment:edit'
 
@@ -349,7 +418,6 @@ class PaymentSettleView(views.APIView):
         except ReceivablePayable.DoesNotExist:
             return error_response(message='应收应付单不存在', code=404)
 
-        # 类型匹配校验：收款只能核销应收，付款只能核销应付
         type_map = {'receipt': 'receivable', 'payment': 'payable'}
         if type_map.get(payment.doc_type) != receivable.doc_type:
             return error_response(
@@ -357,7 +425,6 @@ class PaymentSettleView(views.APIView):
                 code=400
             )
 
-        # 校验金额（注意：property 返回 Decimal，但需确保比较一致）
         unsettled = Decimal(str(payment.unsettled_amount))
         remaining = Decimal(str(receivable.remaining_amount))
         if amount > unsettled:
@@ -371,14 +438,12 @@ class PaymentSettleView(views.APIView):
                 code=400
             )
 
-        # 创建核销记录
         settlement = Settlement.objects.create(
             payment_receipt=payment,
             receivable_payable=receivable,
             amount=amount
         )
 
-        # 更新应收应付已结金额和状态
         receivable.paid_amount += amount
         if receivable.paid_amount >= receivable.amount:
             receivable.status = 'paid'
@@ -395,10 +460,6 @@ class PaymentSettleView(views.APIView):
 
 
 class CancelSettleView(views.APIView):
-    """
-    取消核销
-    POST /settlements/<id>/cancel/
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:payment:edit'
 
@@ -412,10 +473,8 @@ class CancelSettleView(views.APIView):
         receivable = settlement.receivable_payable
         amount = settlement.amount
 
-        # 删除核销记录
         settlement.delete()
 
-        # 反更新应收应付
         receivable.paid_amount -= amount
         if receivable.paid_amount <= 0:
             receivable.paid_amount = 0
@@ -432,10 +491,6 @@ class CancelSettleView(views.APIView):
 # ==================== 逾期查询 ====================
 
 class OverdueReceivableView(views.APIView):
-    """
-    逾期应收应付查询
-    GET /receivables/overdue/?doc_type=receivable
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:receivable:view'
 
@@ -541,12 +596,106 @@ class StatementView(views.APIView):
         })
 
 
+# ==================== 往来余额表 ====================
+
+class CounterpartyBalanceView(views.APIView):
+    """
+    往来余额表：按往来单位展示期初余额、本期发生额、期末余额
+    GET /balance/?date_from=2024-01-01&date_to=2024-12-31
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'finance:receivable:view'
+
+    def get(self, request):
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+
+        if not date_from or not date_to:
+            return error_response(message='请指定日期范围', code=400)
+
+        from decimal import Decimal
+
+        # 获取所有有业务往来的单位
+        all_parties = set()
+        for rp in ReceivablePayable.objects.values('counterparty', 'doc_type').distinct():
+            all_parties.add((rp['counterparty'], rp['doc_type']))
+        for pm in PaymentReceipt.objects.values('counterparty', 'doc_type').distinct():
+            all_parties.add((pm['counterparty'], pm['doc_type']))
+
+        # 按单位名称聚合
+        counterparty_names = set(p[0] for p in all_parties)
+
+        results = []
+        for name in sorted(counterparty_names):
+            # 期初余额（date_from 之前的累计）
+            opening_rp = ReceivablePayable.objects.filter(
+                counterparty=name,
+                doc_date__lt=date_from
+            )
+            opening_receivable = opening_rp.filter(doc_type='receivable').aggregate(
+                t=Sum(F('amount') - F('paid_amount'))
+            )['t'] or Decimal('0')
+            opening_payable = opening_rp.filter(doc_type='payable').aggregate(
+                t=Sum(F('amount') - F('paid_amount'))
+            )['t'] or Decimal('0')
+
+            # 本期应收应付发生额
+            period_rp = ReceivablePayable.objects.filter(
+                counterparty=name,
+                doc_date__gte=date_from,
+                doc_date__lte=date_to
+            )
+            period_receivable = period_rp.filter(doc_type='receivable').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+            period_receivable_paid = period_rp.filter(doc_type='receivable').aggregate(t=Sum('paid_amount'))['t'] or Decimal('0')
+            period_payable = period_rp.filter(doc_type='payable').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+            period_payable_paid = period_rp.filter(doc_type='payable').aggregate(t=Sum('paid_amount'))['t'] or Decimal('0')
+
+            # 本期收付款发生额
+            period_pm = PaymentReceipt.objects.filter(
+                counterparty=name,
+                doc_date__gte=date_from,
+                doc_date__lte=date_to
+            )
+            period_receipt = period_pm.filter(doc_type='receipt').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+            period_payment = period_pm.filter(doc_type='payment').aggregate(t=Sum('amount'))['t'] or Decimal('0')
+
+            # 期末余额 = 期初 + 本期应收 - 本期收款（简化计算：直接用应收应付剩余金额）
+            closing_rp = ReceivablePayable.objects.filter(counterparty=name, doc_date__lte=date_to)
+            closing_receivable = closing_rp.filter(doc_type='receivable').aggregate(
+                t=Sum(F('amount') - F('paid_amount'))
+            )['t'] or Decimal('0')
+            closing_payable = closing_rp.filter(doc_type='payable').aggregate(
+                t=Sum(F('amount') - F('paid_amount'))
+            )['t'] or Decimal('0')
+
+            # 只显示有数据的单位
+            has_data = (
+                opening_receivable or opening_payable or
+                period_receivable or period_payable or
+                period_receipt or period_payment
+            )
+            if has_data:
+                results.append({
+                    'counterparty': name,
+                    'opening_receivable': float(opening_receivable),
+                    'opening_payable': float(opening_payable),
+                    'period_receivable': float(period_receivable),
+                    'period_receivable_paid': float(period_receivable_paid),
+                    'period_payable': float(period_payable),
+                    'period_payable_paid': float(period_payable_paid),
+                    'period_receipt': float(period_receipt),
+                    'period_payment': float(period_payment),
+                    'closing_receivable': float(closing_receivable),
+                    'closing_payable': float(closing_payable),
+                    'net_balance': float(closing_receivable - closing_payable),
+                })
+
+        return success_response(data=results)
+
+
 # ==================== 财务汇总 ====================
 
 class FinanceSummaryView(views.APIView):
-    """
-    财务报表基础：应收应付、收付款汇总
-    """
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:receivable:view'
 

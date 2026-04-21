@@ -88,9 +88,34 @@ export function cancelSettlement(id) {
   return request({ url: `/finance/settlements/${id}/cancel/`, method: 'post' })
 }
 
+// ==================== 往来单位 ====================
+export function getCounterpartyList(params) {
+  return request({ url: '/finance/counterparties/', method: 'get', params })
+}
+export function getCounterpartyOptions() {
+  return request({ url: '/finance/counterparties/options/', method: 'get' })
+}
+export function getCounterpartyStats() {
+  return request({ url: '/finance/counterparties/stats/', method: 'get' })
+}
+export function createCounterparty(data) {
+  return request({ url: '/finance/counterparties/', method: 'post', data })
+}
+export function updateCounterparty(id, data) {
+  return request({ url: `/finance/counterparties/${id}/`, method: 'put', data })
+}
+export function deleteCounterparty(id) {
+  return request({ url: `/finance/counterparties/${id}/`, method: 'delete' })
+}
+
 // ==================== 对账单 ====================
 export function getStatement(params) {
   return request({ url: '/finance/statement/', method: 'get', params })
+}
+
+// ==================== 往来余额表 ====================
+export function getBalanceSheet(params) {
+  return request({ url: '/finance/balance/', method: 'get', params })
 }
 
 // ==================== 财务汇总 ====================

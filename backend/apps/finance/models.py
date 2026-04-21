@@ -103,6 +103,70 @@ class VoucherItem(models.Model):
         ordering = ['line_no']
 
 
+# ==================== 对账往来模块 ====================
+
+class Counterparty(models.Model):
+    """
+    往来单位：客户/供应商等往来方
+    """
+    TYPE_CHOICES = (
+        ('customer', '客户'),
+        ('supplier', '供应商'),
+        ('both', '客户+供应商'),
+        ('other', '其他'),
+    )
+
+    name = models.CharField(max_length=128, unique=True, verbose_name='单位名称')
+    type = models.CharField(max_length=16, choices=TYPE_CHOICES, default='customer', verbose_name='单位类型')
+    contact = models.CharField(max_length=64, blank=True, null=True, verbose_name='联系人')
+    phone = models.CharField(max_length=32, blank=True, null=True, verbose_name='联系电话')
+    address = models.CharField(max_length=255, blank=True, null=True, verbose_name='地址')
+    bank_name = models.CharField(max_length=128, blank=True, null=True, verbose_name='开户银行')
+    bank_account = models.CharField(max_length=64, blank=True, null=True, verbose_name='银行账号')
+    tax_no = models.CharField(max_length=64, blank=True, null=True, verbose_name='税号')
+    remark = models.TextField(blank=True, null=True, verbose_name='备注')
+    is_active = models.BooleanField(default=True, verbose_name='是否启用')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'finance_counterparty'
+        verbose_name = '往来单位'
+        verbose_name_plural = verbose_name
+        ordering = ['-id']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def receivable_total(self):
+        """应收总额"""
+        from django.db.models import Sum
+        return self.receivables.filter(doc_type='receivable').aggregate(t=Sum('amount'))['t'] or 0
+
+    @property
+    def receivable_unpaid(self):
+        """应收未结金额"""
+        from django.db.models import Sum, F
+        return self.receivables.filter(doc_type='receivable').exclude(status='paid').aggregate(
+            t=Sum(F('amount') - F('paid_amount'))
+        )['t'] or 0
+
+    @property
+    def payable_total(self):
+        """应付总额"""
+        from django.db.models import Sum
+        return self.receivables.filter(doc_type='payable').aggregate(t=Sum('amount'))['t'] or 0
+
+    @property
+    def payable_unpaid(self):
+        """应付未结金额"""
+        from django.db.models import Sum, F
+        return self.receivables.filter(doc_type='payable').exclude(status='paid').aggregate(
+            t=Sum(F('amount') - F('paid_amount'))
+        )['t'] or 0
+
+
 class ReceivablePayable(models.Model):
     """
     应收应付：记录企业与客户/供应商之间的应收应付款项
@@ -125,6 +189,14 @@ class ReceivablePayable(models.Model):
     doc_no = models.CharField(max_length=64, unique=True, verbose_name='单据编号')
     doc_type = models.CharField(max_length=16, choices=TYPE_CHOICES, verbose_name='类型')
     counterparty = models.CharField(max_length=128, verbose_name='往来单位')
+    counterparty_obj = models.ForeignKey(
+        Counterparty,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='receivables',
+        verbose_name='往来单位关联'
+    )
     doc_date = models.DateField(verbose_name='单据日期')
     due_date = models.DateField(blank=True, null=True, verbose_name='到期日')
     amount = models.DecimalField(max_digits=14, decimal_places=2, verbose_name='金额')
@@ -184,6 +256,14 @@ class PaymentReceipt(models.Model):
     doc_no = models.CharField(max_length=64, unique=True, verbose_name='单据编号')
     doc_type = models.CharField(max_length=16, choices=TYPE_CHOICES, verbose_name='类型')
     counterparty = models.CharField(max_length=128, verbose_name='往来单位')
+    counterparty_obj = models.ForeignKey(
+        Counterparty,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='payments',
+        verbose_name='往来单位关联'
+    )
     doc_date = models.DateField(verbose_name='日期')
     amount = models.DecimalField(max_digits=14, decimal_places=2, verbose_name='金额')
     payment_method = models.CharField(max_length=16, choices=METHOD_CHOICES, default='bank_transfer', verbose_name='付款方式')

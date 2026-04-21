@@ -1,8 +1,10 @@
 from rest_framework import serializers
-from apps.hr.models import Employee, Attendance, Salary, Recruitment
+from apps.hr.models import Employee, Attendance, Salary, Recruitment, DingTalkConfig
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
+    age = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Employee
         fields = '__all__'
@@ -17,6 +19,7 @@ class EmployeeOptionSerializer(serializers.ModelSerializer):
 class AttendanceSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.name', read_only=True)
     employee_no = serializers.CharField(source='employee.employee_no', read_only=True)
+    department = serializers.CharField(source='employee.department', read_only=True)
 
     class Meta:
         model = Attendance
@@ -38,3 +41,13 @@ class RecruitmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recruitment
         fields = '__all__'
+
+
+class DingTalkConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DingTalkConfig
+        fields = ['id', 'app_key', 'app_secret', 'access_token', 'token_expires_at', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'app_secret': {'write_only': True},
+            'access_token': {'read_only': True},
+        }

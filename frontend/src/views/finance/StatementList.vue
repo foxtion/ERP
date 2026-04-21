@@ -4,7 +4,20 @@
       <div class="toolbar">
         <el-form :model="searchForm" inline>
           <el-form-item label="往来单位">
-            <el-input v-model="searchForm.counterparty" placeholder="请输入往来单位" clearable style="width: 200px" />
+            <el-select
+              v-model="searchForm.counterparty"
+              filterable
+              clearable
+              placeholder="请选择往来单位"
+              style="width: 200px"
+            >
+              <el-option
+                v-for="c in counterpartyOptions"
+                :key="c.id"
+                :label="c.name"
+                :value="c.name"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="日期范围">
             <el-date-picker
@@ -65,35 +78,32 @@
       </el-row>
 
       <!-- 明细表格 -->
-      <el-table v-if="items.length > 0" :data="items" border stripe v-loading="loading" class="statement-table">
+      <el-table v-if="items.length > 0" :data="items" border stripe v-loading="loading" class="statement-table" show-summary :summary-method="getSummaries">
         <el-table-column prop="date" label="日期" width="110" />
-        <el-table-column prop="doc_no" label="单据编号" min-width="150" />
+        <el-table-column prop="doc_no" label="单据编号" min-width="160" show-overflow-tooltip />
         <el-table-column label="类型" width="110" align="center">
           <template #default="{ row }">
-            <el-tag
-              :type="getDocTypeTag(row)"
-              size="small"
-            >
+            <el-tag :type="getDocTypeTag(row)" size="small">
               {{ row.doc_type_text }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="金额" width="120" align="right">
+        <el-table-column label="金额" width="130" align="right">
           <template #default="{ row }">
             <span :class="getAmountClass(row)">{{ formatMoney(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="已结/核销" width="120" align="right">
+        <el-table-column label="已结/核销" width="130" align="right">
           <template #default="{ row }">
             <span>{{ formatMoney(row.paid_amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="剩余" width="120" align="right">
+        <el-table-column label="剩余" width="130" align="right">
           <template #default="{ row }">
             <span :class="{ 'text-warning': row.remaining > 0 }">{{ formatMoney(row.remaining) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status_text" label="状态" width="90" align="center">
+        <el-table-column prop="status_text" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.status" :type="statusType(row.status)" size="small">{{ row.status_text }}</el-tag>
             <span v-else>-</span>
@@ -108,14 +118,15 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getStatement } from '@/api/finance'
+import { getStatement, getCounterpartyOptions } from '@/api/finance'
 
 const loading = ref(false)
 const searched = ref(false)
 const items = ref([])
 const summary = ref(null)
+const counterpartyOptions = ref([])
 
 const searchForm = reactive({
   counterparty: '',
@@ -144,9 +155,37 @@ const getAmountClass = (row) => {
   return ''
 }
 
+const getSummaries = (param) => {
+  const { columns, data } = param
+  const sums = []
+  columns.forEach((column, index) => {
+    if (index === 0) {
+      sums[index] = '合计'
+      return
+    }
+    if (['date', 'doc_no', 'status_text', 'remark'].includes(column.property)) {
+      sums[index] = ''
+      return
+    }
+    const values = data.map(item => Number(item[column.property]) || 0)
+    const sum = values.reduce((a, b) => a + b, 0)
+    sums[index] = sum !== 0 ? formatMoney(sum) : '-'
+  })
+  return sums
+}
+
+onMounted(async () => {
+  try {
+    const res = await getCounterpartyOptions()
+    counterpartyOptions.value = res.data || []
+  } catch (e) {
+    // ignore
+  }
+})
+
 const handleSearch = async () => {
   if (!searchForm.counterparty) {
-    ElMessage.warning('请输入往来单位')
+    ElMessage.warning('请选择往来单位')
     return
   }
   loading.value = true
@@ -184,15 +223,8 @@ const handleReset = () => {
   text-align: center;
   color: #fff;
 }
-.summary-card .label {
-  font-size: 13px;
-  margin-bottom: 8px;
-  opacity: 0.9;
-}
-.summary-card .value {
-  font-size: 18px;
-  font-weight: bold;
-}
+.summary-card .label { font-size: 13px; margin-bottom: 8px; opacity: 0.9; }
+.summary-card .value { font-size: 18px; font-weight: bold; }
 .bg-receivable { background: linear-gradient(135deg, #67c23a, #85ce61); }
 .bg-receivable-paid { background: linear-gradient(135deg, #409eff, #66b1ff); }
 .bg-receivable-unpaid { background: linear-gradient(135deg, #e6a23c, #ebb563); }

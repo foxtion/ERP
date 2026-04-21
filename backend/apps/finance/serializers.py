@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from apps.finance.models import AccountSubject, Voucher, VoucherItem, ReceivablePayable, PaymentReceipt, Settlement
+from apps.finance.models import (
+    AccountSubject, Voucher, VoucherItem,
+    Counterparty, ReceivablePayable, PaymentReceipt, Settlement
+)
 
 
 class AccountSubjectSerializer(serializers.ModelSerializer):
@@ -69,6 +72,32 @@ class VoucherSerializer(serializers.ModelSerializer):
         return instance
 
 
+# ==================== 往来单位 ====================
+
+class CounterpartySerializer(serializers.ModelSerializer):
+    receivable_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    receivable_unpaid = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    payable_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    payable_unpaid = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    net_balance = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Counterparty
+        fields = '__all__'
+
+    def get_net_balance(self, obj):
+        """净余额 = 应收未结 - 应付未结"""
+        return float(obj.receivable_unpaid) - float(obj.payable_unpaid)
+
+
+class CounterpartyOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Counterparty
+        fields = ['id', 'name', 'type']
+
+
+# ==================== 应收应付 / 收付款 / 核销 ====================
+
 class SettlementSerializer(serializers.ModelSerializer):
     payment_receipt_no = serializers.CharField(source='payment_receipt.doc_no', read_only=True)
     receivable_payable_no = serializers.CharField(source='receivable_payable.doc_no', read_only=True)
@@ -84,6 +113,7 @@ class ReceivablePayableSerializer(serializers.ModelSerializer):
     overdue_days = serializers.IntegerField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
     settlements = SettlementSerializer(many=True, read_only=True)
+    counterparty_name = serializers.CharField(source='counterparty_obj.name', read_only=True)
 
     class Meta:
         model = ReceivablePayable
@@ -95,7 +125,29 @@ class PaymentReceiptSerializer(serializers.ModelSerializer):
     settled_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     unsettled_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     settlements = SettlementSerializer(many=True, read_only=True)
+    counterparty_name = serializers.CharField(source='counterparty_obj.name', read_only=True)
 
     class Meta:
         model = PaymentReceipt
         fields = '__all__'
+
+
+# ==================== 对账往来专用序列化器 ====================
+
+class CounterpartyBalanceSerializer(serializers.Serializer):
+    """往来余额表序列化器"""
+    counterparty = serializers.CharField()
+    type = serializers.CharField()
+    # 期初余额（截止到查询开始日期之前的累计）
+    opening_receivable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    opening_payable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    # 本期发生额
+    period_receivable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    period_receivable_paid = serializers.DecimalField(max_digits=14, decimal_places=2)
+    period_payable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    period_payable_paid = serializers.DecimalField(max_digits=14, decimal_places=2)
+    period_receipt = serializers.DecimalField(max_digits=14, decimal_places=2)
+    period_payment = serializers.DecimalField(max_digits=14, decimal_places=2)
+    # 期末余额
+    closing_receivable = serializers.DecimalField(max_digits=14, decimal_places=2)
+    closing_payable = serializers.DecimalField(max_digits=14, decimal_places=2)

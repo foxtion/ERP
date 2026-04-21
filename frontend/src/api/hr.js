@@ -16,6 +16,18 @@ export function deleteEmployee(id) {
 export function getEmployeeOptions() {
   return request({ url: '/hr/employees/options/', method: 'get' })
 }
+export function generateEmployeeNo() {
+  return request({ url: '/hr/employees/generate_no/', method: 'get' })
+}
+export function confirmEmployee(id) {
+  return request({ url: `/hr/employees/${id}/confirm/`, method: 'post' })
+}
+export function resignEmployee(id) {
+  return request({ url: `/hr/employees/${id}/resign/`, method: 'post' })
+}
+export function getEmployeeStats() {
+  return request({ url: '/hr/employees/stats/', method: 'get' })
+}
 
 // ==================== 考勤记录 ====================
 export function getAttendanceList(params) {
@@ -29,6 +41,26 @@ export function updateAttendance(id, data) {
 }
 export function deleteAttendance(id) {
   return request({ url: `/hr/attendances/${id}/`, method: 'delete' })
+}
+export function getAttendanceStats(params) {
+  return request({ url: '/hr/attendances/stats/', method: 'get', params })
+}
+export function bulkCreateAttendance(data) {
+  return request({ url: '/hr/attendances/bulk/', method: 'post', data })
+}
+
+// ==================== 钉钉集成 ====================
+export function getDingTalkConfig() {
+  return request({ url: '/hr/dingtalk/config/', method: 'get' })
+}
+export function saveDingTalkConfig(data) {
+  return request({ url: '/hr/dingtalk/config/', method: 'post', data })
+}
+export function testDingTalkConnection() {
+  return request({ url: '/hr/dingtalk/test/', method: 'get' })
+}
+export function syncDingTalkAttendance(data) {
+  return request({ url: '/hr/dingtalk/sync/', method: 'post', data })
 }
 
 // ==================== 薪资管理 ====================
