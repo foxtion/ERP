@@ -172,7 +172,7 @@ class VoucherGenerateNoView(views.APIView):
         from datetime import datetime
         date_str = datetime.now().strftime('%Y%m%d')
         prefix = f'PZ{date_str}'
-        existing = Voucher.objects.filter(voucher_no__startswith=prefix).order_by('-voucher_no').first()
+        existing = Voucher.objects.filter(voucher_no__startswith=prefix).order_by('-id').first()
         if existing:
             try:
                 seq = int(existing.voucher_no.split('-')[-1]) + 1
@@ -236,7 +236,7 @@ class CounterpartyStatsView(views.APIView):
     required_permission = 'finance:receivable:view'
 
     def get(self, request):
-        # 按往来单位统计应收未结
+        from decimal import Decimal
         receivable_stats = []
         rp_qs = ReceivablePayable.objects.filter(
             doc_type='receivable'
@@ -247,11 +247,10 @@ class CounterpartyStatsView(views.APIView):
         for d in rp_qs:
             receivable_stats.append({
                 'counterparty': d['counterparty'],
-                'total': float(d['total'] or 0),
-                'unpaid': float((d['total'] or 0) - (d['paid'] or 0)),
+                'total': str(d['total'] or Decimal('0')),
+                'unpaid': str((d['total'] or Decimal('0')) - (d['paid'] or Decimal('0'))),
             })
 
-        # 按往来单位统计应付未结
         payable_stats = []
         py_qs = ReceivablePayable.objects.filter(
             doc_type='payable'
@@ -262,8 +261,8 @@ class CounterpartyStatsView(views.APIView):
         for d in py_qs:
             payable_stats.append({
                 'counterparty': d['counterparty'],
-                'total': float(d['total'] or 0),
-                'unpaid': float((d['total'] or 0) - (d['paid'] or 0)),
+                'total': str(d['total'] or Decimal('0')),
+                'unpaid': str((d['total'] or Decimal('0')) - (d['paid'] or Decimal('0'))),
             })
 
         return success_response(data={
@@ -384,6 +383,9 @@ class SettlementRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'finance:payment:edit'
 
+    def destroy(self, request, *args, **kwargs):
+        return error_response(message='核销记录不允许直接删除，请使用取消核销接口', code=400)
+
 
 # ==================== 核销操作 ====================
 
@@ -479,8 +481,6 @@ class CancelSettleView(views.APIView):
         if receivable.paid_amount <= 0:
             receivable.paid_amount = 0
             receivable.status = 'unpaid'
-        elif receivable.paid_amount >= receivable.amount:
-            receivable.status = 'paid'
         else:
             receivable.status = 'partial'
         receivable.save()
@@ -549,9 +549,9 @@ class StatementView(views.APIView):
                 'type': 'receivable_payable',
                 'doc_type': rp.doc_type,
                 'doc_type_text': rp.get_doc_type_display(),
-                'amount': float(rp.amount),
-                'paid_amount': float(rp.paid_amount),
-                'remaining': float(rp.remaining_amount),
+                'amount': str(rp.amount),
+                'paid_amount': str(rp.paid_amount),
+                'remaining': str(rp.remaining_amount),
                 'status': rp.status,
                 'status_text': rp.get_status_display(),
                 'remark': rp.remark or '',
@@ -563,9 +563,9 @@ class StatementView(views.APIView):
                 'type': 'payment_receipt',
                 'doc_type': pm.doc_type,
                 'doc_type_text': pm.get_doc_type_display(),
-                'amount': float(pm.amount),
-                'paid_amount': float(pm.settled_amount),
-                'remaining': float(pm.unsettled_amount),
+                'amount': str(pm.amount),
+                'paid_amount': str(pm.settled_amount),
+                'remaining': str(pm.unsettled_amount),
                 'status': '',
                 'status_text': '',
                 'remark': pm.remark or '',
@@ -584,14 +584,14 @@ class StatementView(views.APIView):
             'counterparty': counterparty,
             'items': items,
             'summary': {
-                'receivable_total': float(receivable_total),
-                'receivable_paid': float(receivable_paid),
-                'receivable_unpaid': float(receivable_total - receivable_paid),
-                'payable_total': float(payable_total),
-                'payable_paid': float(payable_paid),
-                'payable_unpaid': float(payable_total - payable_paid),
-                'receipt_total': float(receipt_total),
-                'payment_total': float(payment_total),
+                'receivable_total': str(receivable_total),
+                'receivable_paid': str(receivable_paid),
+                'receivable_unpaid': str(receivable_total - receivable_paid),
+                'payable_total': str(payable_total),
+                'payable_paid': str(payable_paid),
+                'payable_unpaid': str(payable_total - payable_paid),
+                'receipt_total': str(receipt_total),
+                'payment_total': str(payment_total),
             }
         })
 
@@ -677,17 +677,17 @@ class CounterpartyBalanceView(views.APIView):
             if has_data:
                 results.append({
                     'counterparty': name,
-                    'opening_receivable': float(opening_receivable),
-                    'opening_payable': float(opening_payable),
-                    'period_receivable': float(period_receivable),
-                    'period_receivable_paid': float(period_receivable_paid),
-                    'period_payable': float(period_payable),
-                    'period_payable_paid': float(period_payable_paid),
-                    'period_receipt': float(period_receipt),
-                    'period_payment': float(period_payment),
-                    'closing_receivable': float(closing_receivable),
-                    'closing_payable': float(closing_payable),
-                    'net_balance': float(closing_receivable - closing_payable),
+                    'opening_receivable': str(opening_receivable),
+                    'opening_payable': str(opening_payable),
+                    'period_receivable': str(period_receivable),
+                    'period_receivable_paid': str(period_receivable_paid),
+                    'period_payable': str(period_payable),
+                    'period_payable_paid': str(period_payable_paid),
+                    'period_receipt': str(period_receipt),
+                    'period_payment': str(period_payment),
+                    'closing_receivable': str(closing_receivable),
+                    'closing_payable': str(closing_payable),
+                    'net_balance': str(closing_receivable - closing_payable),
                 })
 
         return success_response(data=results)
@@ -726,18 +726,18 @@ class FinanceSummaryView(views.APIView):
         for d in debtor_qs:
             top_debtors.append({
                 'counterparty': d['counterparty'],
-                'total': float(d['total'] or 0),
-                'unpaid': float((d['total'] or 0) - (d['paid'] or 0)),
+                'total': str(d['total'] or 0),
+                'unpaid': str((d['total'] or 0) - (d['paid'] or 0)),
             })
 
         return success_response(data={
-            'receivable_total': float(receivable_total),
-            'receivable_unpaid': float(receivable_total - receivable_paid),
-            'payable_total': float(payable_total),
-            'payable_unpaid': float(payable_total - payable_paid),
-            'receipt_total': float(receipt_total),
-            'payment_total': float(payment_total),
-            'overdue_receivable': float(overdue_receivable),
-            'overdue_receivable_unpaid': float(overdue_receivable_unpaid or 0),
+            'receivable_total': str(receivable_total),
+            'receivable_unpaid': str(receivable_total - receivable_paid),
+            'payable_total': str(payable_total),
+            'payable_unpaid': str(payable_total - payable_paid),
+            'receipt_total': str(receipt_total),
+            'payment_total': str(payment_total),
+            'overdue_receivable': str(overdue_receivable),
+            'overdue_receivable_unpaid': str(overdue_receivable_unpaid or 0),
             'top_debtors': top_debtors,
         })

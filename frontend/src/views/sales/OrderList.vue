@@ -28,10 +28,11 @@
         </el-table-column>
         <el-table-column prop="total_amount" label="总金额" width="120" align="right" />
         <el-table-column prop="salesman_name" label="销售员" min-width="120" />
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'sales:order:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
             <el-button v-permission="'sales:order:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="['confirmed','partial'].includes(row.status)" v-permission="'sales:picking:add'" link type="success" @click="handleCreatePicking(row)">生成拣货单</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -154,7 +155,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder } from '@/api/sales'
+import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder, createPickingFromOrder } from '@/api/sales'
 import { getCustomerList } from '@/api/sales'
 import { getMaterialOptions } from '@/api/inventory'
 
@@ -320,6 +321,16 @@ const handleDelete = (row) => {
     ElMessage.success('删除成功')
     await fetchData()
   })
+}
+
+const handleCreatePicking = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定为订单 "${row.order_no}" 生成拣货单吗？`, '提示', { type: 'info' })
+    const res = await createPickingFromOrder(row.id)
+    ElMessage.success(`拣货单 ${res.data.picking_no} 生成成功`)
+  } catch (e) {
+    // 取消或报错
+  }
 }
 </script>
 

@@ -75,7 +75,7 @@ class EmployeeGenerateNoView(views.APIView):
         from datetime import datetime
         date_str = datetime.now().strftime('%Y%m')
         prefix = f'EMP{date_str}'
-        existing = Employee.objects.filter(employee_no__startswith=prefix).order_by('-employee_no').first()
+        existing = Employee.objects.filter(employee_no__startswith=prefix).order_by('-id').first()
         if existing:
             try:
                 seq = int(existing.employee_no.split('-')[-1]) + 1
@@ -89,6 +89,7 @@ class EmployeeGenerateNoView(views.APIView):
 class EmployeeConfirmView(views.APIView):
     """
     员工转正：试用期 -> 在职
+    同步启用关联的系统用户
     POST /employees/<id>/confirm/
     """
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -102,12 +103,17 @@ class EmployeeConfirmView(views.APIView):
         employee.status = 'active'
         employee.probation_end_date = date.today()
         employee.save()
+        # 启用关联系统用户
+        if employee.user:
+            employee.user.is_active = True
+            employee.user.save(update_fields=['is_active'])
         return success_response(data=EmployeeSerializer(employee).data, message='转正成功')
 
 
 class EmployeeResignView(views.APIView):
     """
     员工离职：在职/试用期 -> 离职
+    同步禁用关联的系统用户
     POST /employees/<id>/resign/
     """
     permission_classes = [IsAuthenticated, RBACPermission]
@@ -121,6 +127,10 @@ class EmployeeResignView(views.APIView):
         employee.status = 'resigned'
         employee.resignation_date = date.today()
         employee.save()
+        # 禁用关联系统用户
+        if employee.user:
+            employee.user.is_active = False
+            employee.user.save(update_fields=['is_active'])
         return success_response(data=EmployeeSerializer(employee).data, message='离职操作成功')
 
 
@@ -303,6 +313,8 @@ class AttendanceBulkCreateView(views.APIView):
                     'status': status,
                 }
             )
+            # 强制触发 save() 以计算工作时长等
+            obj.save()
             if created:
                 created_count += 1
             else:
@@ -385,7 +397,7 @@ class DingTalkConfigView(views.APIView):
     required_permission = 'hr:attendance:edit'
 
     def get(self, request):
-        config = DingTalkConfig.objects.first()
+        config = DingTalkConfig.objects.filter(id=1).first()
         if not config:
             return success_response(data=None)
         # 脱敏显示

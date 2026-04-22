@@ -3,7 +3,9 @@ from apps.hr.models import Employee, Attendance, Salary, Recruitment, DingTalkCo
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    age = serializers.IntegerField(read_only=True)
+    age = serializers.IntegerField(read_only=True, allow_null=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = Employee

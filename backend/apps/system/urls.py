@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.system import views
 
@@ -7,8 +6,9 @@ urlpatterns = [
     # JWT认证
     path('auth/login/', views.LoginView.as_view(), name='login'),
     path('auth/logout/', views.LogoutView.as_view(), name='logout'),
-    path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/refresh/', views.CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/info/', views.UserInfoView.as_view(), name='user_info'),
+    path('auth/change-password/', views.ChangePasswordView.as_view(), name='change_password'),
 
     # 用户管理
     path('users/', views.UserListCreateView.as_view(), name='user_list_create'),

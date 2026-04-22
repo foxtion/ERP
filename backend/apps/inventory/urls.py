@@ -15,9 +15,11 @@ urlpatterns = [
 
     path('transfers/', views.StockTransferListCreateView.as_view(), name='transfer_list'),
     path('transfers/<int:pk>/', views.StockTransferRetrieveUpdateDestroyView.as_view(), name='transfer_detail'),
+    path('transfers/<int:pk>/execute/', views.StockTransferExecuteView.as_view(), name='transfer_execute'),
 
     path('checks/', views.InventoryCheckListCreateView.as_view(), name='check_list'),
     path('checks/<int:pk>/', views.InventoryCheckRetrieveUpdateDestroyView.as_view(), name='check_detail'),
+    path('checks/<int:pk>/complete/', views.InventoryCheckCompleteView.as_view(), name='check_complete'),
 
     path('locations/', views.WarehouseLocationListCreateView.as_view(), name='location_list'),
     path('locations/<int:pk>/', views.WarehouseLocationRetrieveUpdateDestroyView.as_view(), name='location_detail'),

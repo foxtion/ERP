@@ -20,15 +20,15 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+          <el-button :icon="RefreshLeft" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
 
       <div class="toolbar">
-        <el-button v-permission="'system:menu:add'" type="primary" @click="handleAdd">新增菜单</el-button>
-        <el-button @click="expandAll">展开全部</el-button>
-        <el-button @click="collapseAll">收起全部</el-button>
+        <el-button v-permission="'system:menu:add'" type="primary" :icon="Plus" @click="handleAdd">新增菜单</el-button>
+        <el-button :icon="Expand" @click="expandAll">展开全部</el-button>
+        <el-button :icon="Fold" @click="collapseAll">收起全部</el-button>
       </div>
 
       <el-table
@@ -70,9 +70,9 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button v-permission="'system:menu:add'" link type="primary" @click="handleAddChild(row)">新增</el-button>
-            <el-button v-permission="'system:menu:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'system:menu:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'system:menu:add'" link type="primary" :icon="Plus" @click="handleAddChild(row)">新增</el-button>
+            <el-button v-permission="'system:menu:edit'" link type="primary" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'system:menu:delete'" link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -190,6 +190,7 @@
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, RefreshLeft, Plus, Edit, Delete, Expand, Fold } from '@element-plus/icons-vue'
 import { getMenuList, getMenuTree, createMenu, updateMenu, deleteMenu } from '@/api/system'
 import IconRender from '@/components/IconRender.vue'
 

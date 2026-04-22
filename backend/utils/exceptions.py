@@ -1,5 +1,8 @@
+import logging
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc, context):
@@ -9,17 +12,21 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
     if response is not None:
-        # 处理DRF标准异常（如ValidationError、AuthenticationFailed等）
         message = response.data
-        # 如果是字典或列表，尝试提取第一条错误信息作为message字符串
         if isinstance(message, dict):
-            first_error = list(message.values())[0]
-            if isinstance(first_error, list):
-                message = first_error[0]
+            if message:
+                first_error = next(iter(message.values()))
+                if isinstance(first_error, list) and first_error:
+                    message = first_error[0]
+                else:
+                    message = str(first_error)
             else:
-                message = str(first_error)
+                message = '请求参数错误'
         elif isinstance(message, list):
-            message = message[0]
+            if message:
+                message = message[0]
+            else:
+                message = '请求参数错误'
         else:
             message = str(message)
 
@@ -29,9 +36,9 @@ def custom_exception_handler(exc, context):
             'data': response.data
         }, status=response.status_code)
 
-    # 非DRF异常（如Python原生异常），返回500
+    logger.exception('服务器内部错误')
     return Response({
         'code': 500,
-        'message': '服务器内部错误：' + str(exc),
+        'message': '服务器内部错误',
         'data': {}
     }, status=500)

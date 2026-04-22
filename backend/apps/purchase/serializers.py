@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import transaction
 from apps.purchase.models import (
     Supplier, PurchaseRequest, PurchaseRequestItem,
     PurchaseOrder, PurchaseOrderItem, PurchaseInStock, PurchaseInStockItem
@@ -32,6 +33,9 @@ class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
         fields = '__all__'
+        extra_kwargs = {
+            'request': {'read_only': True},
+        }
 
 
 class PurchaseRequestSerializer(serializers.ModelSerializer):
@@ -71,6 +75,9 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseOrderItem
         fields = '__all__'
+        extra_kwargs = {
+            'order': {'read_only': True},
+        }
 
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
@@ -132,6 +139,7 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             PurchaseInStockItem.objects.create(stock=stock, **item_data)
         self._update_order_receipt(stock)
+        self._update_inventory(stock)
         return stock
 
     def update(self, instance, validated_data):
@@ -142,6 +150,7 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
             for item_data in items_data:
                 PurchaseInStockItem.objects.create(stock=instance, **item_data)
         self._update_order_receipt(instance)
+        self._update_inventory(instance)
         return instance
 
     def _update_order_receipt(self, stock):
@@ -151,7 +160,6 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
         order = stock.order
         if not order:
             return
-        # 统计该订单下所有入库单的明细数量
         from django.db.models import Sum
         stock_items = {}
         for s in order.purchaseinstock_set.all():
@@ -159,7 +167,6 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
                 key = (item.material_name or '').strip()
                 if key:
                     stock_items[key] = stock_items.get(key, 0) + (item.quantity or 0)
-        # 更新订单明细的 received_qty
         all_completed = True
         any_received = False
         for oi in order.items.all():
@@ -170,9 +177,36 @@ class PurchaseInStockSerializer(serializers.ModelSerializer):
                 any_received = True
             if (oi.quantity or 0) > received:
                 all_completed = False
-        # 更新订单状态
         if all_completed and any_received:
             order.status = 'completed'
         elif any_received:
             order.status = 'partial'
+        else:
+            order.status = 'confirmed'
         order.save()
+
+    def _update_inventory(self, stock):
+        """
+        入库后增加库存台账
+        """
+        from apps.inventory.models import Warehouse, Inventory
+        from decimal import Decimal
+        warehouse_name = stock.warehouse
+        if not warehouse_name:
+            return
+        warehouse = Warehouse.objects.filter(name=warehouse_name).first()
+        if not warehouse:
+            return
+        for item in stock.items.all():
+            qty = item.quantity or Decimal('0')
+            if qty <= 0:
+                continue
+            spec = item.spec or ''
+            inv, created = Inventory.objects.get_or_create(
+                warehouse=warehouse,
+                material_name=item.material_name,
+                spec=spec,
+                defaults={'unit': item.unit or '件', 'qty': 0}
+            )
+            inv.qty += qty
+            inv.save()

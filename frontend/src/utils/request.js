@@ -1,11 +1,11 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
+import { usePermissionStore } from '@/store/permission'
 import router from '@/router'
 
 /**
  * Axios 实例配置
- * baseURL 结合 vite.config.js 的 proxy 配置，开发时自动转发到后端
  */
 const request = axios.create({
   baseURL: '/api',
@@ -18,6 +18,7 @@ const request = axios.create({
 // ==================== Token 自动刷新机制 ====================
 let isRefreshing = false
 let refreshSubscribers = []
+let isLoggingOut = false
 
 function subscribeTokenRefresh(callback) {
   refreshSubscribers.push(callback)
@@ -29,9 +30,24 @@ function onTokenRefreshed(newToken) {
 }
 
 function handleLogout() {
+  if (isLoggingOut) return
+  isLoggingOut = true
   const userStore = useUserStore()
-  userStore.logout()
-  router.push('/login')
+  const permissionStore = usePermissionStore()
+  // 同步清除所有登录态，避免路由守卫认为仍已登录而拒绝跳转到登录页
+  userStore.token = ''
+  userStore.userInfo = null
+  userStore.menus = []
+  userStore.permissions = []
+  localStorage.removeItem('erp_token')
+  localStorage.removeItem('erp_refresh_token')
+  localStorage.removeItem('erp_menus')
+  localStorage.removeItem('erp_permissions')
+  localStorage.removeItem('erp_user_info')
+  permissionStore.clearRoutes()
+  router.push(`/login?redirect=${encodeURIComponent(router.currentRoute.value.fullPath)}`)
+  // 延迟重置锁，避免短时间内重复触发
+  setTimeout(() => { isLoggingOut = false }, 3000)
 }
 
 /**
@@ -62,16 +78,17 @@ request.interceptors.request.use(
 // ==================== 响应拦截器：统一错误处理、Token 无感刷新 ====================
 request.interceptors.response.use(
   (response) => {
-    // blob / arraybuffer 响应直接返回原始 response，不做 JSON 格式校验
+    // blob / arraybuffer 响应直接返回原始 response.data，不做 JSON 格式校验
     if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
-      return response
+      return response.data
     }
     const res = response.data
     // 后端统一格式：{ code, message, data }
-    // 兼容 DRF 默认格式（没有 code 字段时直接返回）
     if (res.code !== undefined && !(res.code >= 200 && res.code < 300)) {
       ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      const err = new Error(res.message || '请求失败')
+      err.response = response
+      return Promise.reject(err)
     }
     return res
   },
@@ -83,8 +100,12 @@ request.interceptors.response.use(
       let message = response.data?.message
 
       // DRF 序列化器错误格式：{ field: [errors] }
-      if (!message && typeof response.data === 'object') {
-        const firstError = Object.values(response.data).flat()[0]
+      if (!message && typeof response.data === 'object' && response.data !== null) {
+        // 排除 code/data 等元字段，只取真正的字段错误
+        const fieldErrors = Object.entries(response.data)
+          .filter(([key]) => !['code', 'data', 'detail'].includes(key))
+          .map(([, val]) => val)
+        const firstError = fieldErrors.flat()[0]
         if (firstError) {
           message = typeof firstError === 'string' ? firstError : firstError.detail || JSON.stringify(firstError)
         }
@@ -93,6 +114,13 @@ request.interceptors.response.use(
 
       // 401 处理：尝试用 refresh_token 无感刷新，失败才跳转登录
       if (status === 401 && originalRequest && !originalRequest._retry) {
+        // 如果当前请求就是 logout 或 refresh，不再重复触发登出
+        const url = originalRequest.url || ''
+        const fullUrl = (originalRequest.baseURL || '') + url
+        if (url.includes('/auth/logout/') || url.includes('/auth/refresh/') ||
+            fullUrl.includes('/auth/logout/') || fullUrl.includes('/auth/refresh/')) {
+          return Promise.reject(error)
+        }
         const refreshToken = localStorage.getItem('erp_refresh_token')
         if (!refreshToken) {
           ElMessage.error('登录已过期，请重新登录')
@@ -126,6 +154,7 @@ request.interceptors.response.use(
           // 正在刷新中，将请求加入队列等待新 token
           return new Promise((resolve) => {
             subscribeTokenRefresh((newToken) => {
+              originalRequest._retry = true
               originalRequest.headers.Authorization = `Bearer ${newToken}`
               resolve(request(originalRequest))
             })

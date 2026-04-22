@@ -30,6 +30,12 @@ export const constantRoutes = [
         component: () => import('@/views/sales/CustomerDetail.vue'),
         meta: { title: '客户详情', hidden: true },
       },
+      {
+        path: '/sales/picking-job/:id',
+        name: 'PickingJob',
+        component: () => import('@/views/sales/PickingJob.vue'),
+        meta: { title: '拣货作业', hidden: true },
+      },
     ],
   },
   {
@@ -69,10 +75,21 @@ router.beforeEach(async (to, from, next) => {
             router.addRoute(route)
           }
         })
-        // 重新导航，确保新路由生效（使用 path 避免 name 被解析为 NotFound）
         next({ path: to.path, query: to.query, hash: to.hash, replace: true })
       } else if (permissionStore.dynamicRoutes.length === 0 && userStore.menus.length === 0) {
-        // 有 Token 但没有菜单缓存，说明登录态异常，重定向到登录页
+        // 有 Token 但没有菜单缓存，说明登录态异常，同步清除token并重定向到登录页
+        // 注意：这里不能用 await userStore.logout()，因为 logout() 内部会调 API，
+        // 而 beforeEach 中异步 next() 会造成路由守卫和 API 拦截器互相触发死循环。
+        userStore.token = ''
+        userStore.userInfo = null
+        userStore.menus = []
+        userStore.permissions = []
+        localStorage.removeItem('erp_token')
+        localStorage.removeItem('erp_refresh_token')
+        localStorage.removeItem('erp_menus')
+        localStorage.removeItem('erp_permissions')
+        localStorage.removeItem('erp_user_info')
+        permissionStore.clearRoutes()
         next({ path: '/login', query: { redirect: to.fullPath } })
       } else {
         next()
@@ -82,7 +99,7 @@ router.beforeEach(async (to, from, next) => {
     if (to.path === '/login') {
       next()
     } else {
-      next(`/login?redirect=${encodeURIComponent(to.path)}`)
+      next(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
     }
   }
 })

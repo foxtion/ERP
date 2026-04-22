@@ -1,8 +1,8 @@
-from django.db import models
+from django.db import models, transaction
 from rest_framework import generics, views
 from rest_framework.permissions import IsAuthenticated
 from apps.system.permissions import RBACPermission
-from utils.response import success_response
+from utils.response import success_response, error_response
 
 from apps.inventory.models import Warehouse, Inventory, StockTransfer, InventoryCheck, WarehouseLocation, Material, StockWarning
 from apps.inventory.serializers import (
@@ -70,10 +70,15 @@ class InventoryListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # 自动更新预警状态
+        # 自动更新预警状态（使用各物料真实阈值）
         warning = self.request.query_params.get('warning')
         if warning == 'true':
-            queryset = queryset.filter(qty__lte=50)
+            from django.db.models import OuterRef, Subquery
+            from apps.inventory.models import Material
+            threshold_subquery = Material.objects.filter(name=OuterRef('material_name')).values('warning_threshold')[:1]
+            queryset = queryset.annotate(
+                real_threshold=Subquery(threshold_subquery)
+            ).filter(qty__lte=models.F('real_threshold'))
         # 支持按物料编码搜索
         search = self.request.query_params.get('search')
         if search:
@@ -114,7 +119,7 @@ class StockStatsView(views.APIView):
         warehouse_count = queryset.values('warehouse').distinct().count()
 
         data = {
-            'total_qty': str(total_qty),
+            'total_qty': total_qty,
             'material_count': material_count,
             'zero_count': zero_count,
             'warehouse_count': warehouse_count,
@@ -272,10 +277,11 @@ class StockWarningHandleView(views.APIView):
         try:
             warning = StockWarning.objects.get(pk=pk)
         except StockWarning.DoesNotExist:
-            return success_response(message='预警记录不存在', code=404)
+            return error_response(message='预警记录不存在', code=404)
         warning.is_handled = True
         warning.handler = request.user
-        warning.handled_at = __import__('django.utils.timezone').utils.timezone.now()
+        from django.utils import timezone
+        warning.handled_at = timezone.now()
         warning.save()
         return success_response(message='已标记为处理')
 
@@ -296,6 +302,97 @@ class StockWarningStatsView(views.APIView):
             'warning': warning_cnt,
             'urgent': urgent_cnt,
         })
+
+
+class StockTransferExecuteView(views.APIView):
+    """
+    执行调拨：扣减调出仓库库存，增加调入仓库库存
+    POST /transfers/<int:pk>/execute/
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'inventory:transfer:edit'
+
+    @transaction.atomic
+    def post(self, request, pk):
+        from decimal import Decimal
+        try:
+            transfer = StockTransfer.objects.prefetch_related('items').get(pk=pk)
+        except StockTransfer.DoesNotExist:
+            return error_response(message='调拨单不存在', code=404)
+
+        from_warehouse = transfer.from_warehouse
+        to_warehouse = transfer.to_warehouse
+
+        for item in transfer.items.all():
+            qty = item.quantity or Decimal('0')
+            spec = item.spec or ''
+            # 扣减调出仓库
+            from_inv = Inventory.objects.select_for_update().filter(
+                warehouse=from_warehouse, material_name=item.material_name, spec=spec
+            ).first()
+            if not from_inv:
+                return error_response(
+                    message=f'物料 "{item.material_name}" 在调出仓库 "{from_warehouse.name}" 中无库存',
+                    code=400
+                )
+            if from_inv.qty < qty:
+                return error_response(
+                    message=f'物料 "{item.material_name}" 调出仓库库存不足，当前 {from_inv.qty}，需要 {qty}',
+                    code=400
+                )
+            from_inv.qty -= qty
+            from_inv.save()
+            # 增加调入仓库
+            to_inv, created = Inventory.objects.get_or_create(
+                warehouse=to_warehouse,
+                material_name=item.material_name,
+                spec=spec,
+                defaults={'unit': item.unit or '件', 'qty': 0}
+            )
+            to_inv.qty += qty
+            to_inv.save()
+
+        return success_response(message='调拨执行成功')
+
+
+class InventoryCheckCompleteView(views.APIView):
+    """
+    完成盘点：根据差异调整库存
+    POST /checks/<int:pk>/complete/
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'inventory:check:edit'
+
+    @transaction.atomic
+    def post(self, request, pk):
+        from decimal import Decimal
+        try:
+            check = InventoryCheck.objects.prefetch_related('items').get(pk=pk)
+        except InventoryCheck.DoesNotExist:
+            return error_response(message='盘点单不存在', code=404)
+        if check.status != 'draft':
+            return error_response(message='只有草稿状态的盘点单可以完成', code=400)
+
+        warehouse = check.warehouse
+        for item in check.items.all():
+            diff = item.diff_qty or Decimal('0')
+            if diff == 0:
+                continue
+            spec = item.spec or ''
+            inv, created = Inventory.objects.get_or_create(
+                warehouse=warehouse,
+                material_name=item.material_name,
+                spec=spec,
+                defaults={'unit': item.unit or '件', 'qty': 0}
+            )
+            inv.qty += diff
+            if inv.qty < 0:
+                inv.qty = 0
+            inv.save()
+
+        check.status = 'completed'
+        check.save()
+        return success_response(message='盘点完成，库存已调整')
 
 
 class MaterialOptionsView(views.APIView):

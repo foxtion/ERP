@@ -83,6 +83,8 @@ function buildMenuTree(menus) {
 function buildDynamicRoutes(menus) {
   const routes = []
   menus.forEach((menu) => {
+    // 过滤按钮类型，防止生成无效路由
+    if (menu.menu_type === 'BUTTON') return
     if (menu.menu_type === 'DIR') {
       // 目录节点：创建父路由
       const route = {

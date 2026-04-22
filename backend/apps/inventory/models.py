@@ -44,7 +44,12 @@ class Inventory(models.Model):
         ordering = ['-id']
         unique_together = [['warehouse', 'material_name', 'spec']]
 
+    def clean(self):
+        if self.spec is None:
+            self.spec = ''
+
     def save(self, *args, **kwargs):
+        self.clean()
         # 根据物料档案的预警阈值自动更新预警状态
         mat = Material.objects.filter(name=self.material_name).first()
         threshold = mat.warning_threshold if mat else 50
@@ -218,6 +223,10 @@ class StockWarning(models.Model):
         ('warning', '预警'),
         ('urgent', '紧急'),
     )
+    WARNING_TYPE_CHOICES = (
+        ('low_stock', '库存不足'),
+        ('picking_shortage', '拣货缺货'),
+    )
     material = models.ForeignKey(
         Material,
         on_delete=models.SET_NULL,
@@ -234,6 +243,7 @@ class StockWarning(models.Model):
     current_qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='当前数量')
     threshold = models.DecimalField(max_digits=14, decimal_places=4, default=50, verbose_name='预警阈值')
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='warning', verbose_name='预警级别')
+    warning_type = models.CharField(max_length=16, choices=WARNING_TYPE_CHOICES, default='low_stock', verbose_name='预警类型')
     is_handled = models.BooleanField(default=False, verbose_name='是否已处理')
     handler = models.ForeignKey(
         settings.AUTH_USER_MODEL,

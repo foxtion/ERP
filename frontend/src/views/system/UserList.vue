@@ -42,17 +42,23 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+          <el-button :icon="RefreshLeft" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
 
       <div class="toolbar">
-        <el-button v-permission="'system:user:add'" type="primary" @click="handleAdd">新增用户</el-button>
+        <el-tag type="info">用户由员工档案自动同步，请前往「人事管理-员工档案」维护</el-tag>
       </div>
 
       <el-table :data="tableData" border stripe>
         <el-table-column prop="username" label="用户名" min-width="120" />
+        <el-table-column prop="employee_name" label="关联员工" min-width="120">
+          <template #default="{ row }">
+            <span v-if="row.employee_name">{{ row.employee_name }} <el-tag size="small" type="info">{{ row.employee_no }}</el-tag></span>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="email" label="邮箱" min-width="180" />
         <el-table-column prop="phone" label="手机号" min-width="120" />
         <el-table-column prop="dept_name" label="所属部门" min-width="120" />
@@ -71,8 +77,8 @@
         <el-table-column prop="created_at" label="创建时间" min-width="160" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'system:user:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'system:user:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'system:user:edit'" link type="primary" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'system:user:delete'" link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -89,11 +95,14 @@
       />
     </el-card>
 
-    <!-- 新增/编辑弹窗 -->
+    <!-- 编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="550px" @closed="onDialogClosed">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" :disabled="isEdit" placeholder="请输入用户名" />
+          <el-input v-model="form.username" />
+        </el-form-item>
+        <el-form-item label="关联员工">
+          <el-input v-model="form.employee_name" disabled />
         </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input
@@ -146,7 +155,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserList, createUser, updateUser, deleteUser } from '@/api/system'
+import { Search, RefreshLeft, Edit, Delete } from '@element-plus/icons-vue'
+import { getUserList, updateUser, deleteUser } from '@/api/system'
 import { getDeptTree } from '@/api/system'
 import { getRoleList } from '@/api/system'
 
@@ -173,6 +183,7 @@ const roleList = ref([])
 
 const form = ref({
   username: '',
+  employee_name: '',
   password: '',
   email: '',
   phone: '',
@@ -237,6 +248,7 @@ const handleReset = () => {
 const resetForm = () => {
   form.value = {
     username: '',
+    employee_name: '',
     password: '',
     email: '',
     phone: '',
@@ -252,14 +264,7 @@ const resetForm = () => {
 const onDialogClosed = () => {
   formRef.value?.resetFields()
   resetForm()
-  rules.value.password = [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
-
-const handleAdd = () => {
-  resetForm()
-  rules.value.password = [{ required: true, message: '请输入密码', trigger: 'blur' }]
-  dialogTitle.value = '新增用户'
-  dialogVisible.value = true
+  rules.value.password = []
 }
 
 const handleEdit = (row) => {
@@ -270,6 +275,7 @@ const handleEdit = (row) => {
   rules.value.password = []
   form.value = {
     username: row.username,
+    employee_name: row.employee_name ? `${row.employee_name} (${row.employee_no})` : '-',
     password: '',
     email: row.email || '',
     phone: row.phone || '',
@@ -288,16 +294,12 @@ const handleSubmit = async () => {
     submitLoading.value = true
     try {
       const payload = { ...form.value }
-      if (isEdit.value && !payload.password) {
+      delete payload.employee_name
+      if (!payload.password) {
         delete payload.password
       }
-      if (isEdit.value) {
-        await updateUser(currentId.value, payload)
-        ElMessage.success('更新成功')
-      } else {
-        await createUser(payload)
-        ElMessage.success('新增成功')
-      }
+      await updateUser(currentId.value, payload)
+      ElMessage.success('更新成功')
       dialogVisible.value = false
       await fetchData()
     } finally {

@@ -200,3 +200,81 @@ class SalesReturnItem(models.Model):
     def save(self, *args, **kwargs):
         self.amount = (self.quantity or 0) * (self.price or 0)
         super().save(*args, **kwargs)
+
+
+class SalesPickingList(models.Model):
+    """
+    销售拣货单（发货单）
+    """
+    STATUS_CHOICES = (
+        ('pending', '待指派'),
+        ('assigned', '已指派'),
+        ('accepted', '已接单'),
+        ('picking', '拿货中'),
+        ('complete', '齐发待出库'),
+        ('shortage', '欠发待出库'),
+        ('done', '已完成'),
+        ('cancelled', '已取消'),
+    )
+
+    picking_no = models.CharField(max_length=64, unique=True, blank=True, verbose_name='拣货单号')
+    order = models.ForeignKey(SalesOrder, on_delete=models.PROTECT, related_name='picking_lists', verbose_name='关联销售订单')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', verbose_name='状态')
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='assigned_pickings',
+        verbose_name='指派员工'
+    )
+    picker = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='picked_pickings',
+        verbose_name='实际拿货人'
+    )
+    warehouse = models.CharField(max_length=64, default='默认仓库', verbose_name='仓库')
+    remark = models.TextField(blank=True, null=True, verbose_name='备注')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'sales_picking_list'
+        verbose_name = '销售拣货单'
+        verbose_name_plural = verbose_name
+        ordering = ['-id']
+
+    def __str__(self):
+        return self.picking_no
+
+
+class SalesPickingListItem(models.Model):
+    """
+    拣货明细
+    """
+    STATUS_CHOICES = (
+        ('pending', '待拿'),
+        ('picked', '已拿'),
+        ('shortage', '缺货'),
+    )
+
+    picking_list = models.ForeignKey(SalesPickingList, on_delete=models.CASCADE, related_name='items', verbose_name='拣货单')
+    order_item = models.ForeignKey(SalesOrderItem, on_delete=models.SET_NULL, blank=True, null=True, verbose_name='关联订单明细')
+    material_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='物料编码')
+    material_name = models.CharField(max_length=128, verbose_name='物料名称')
+    spec = models.CharField(max_length=128, blank=True, null=True, verbose_name='规格型号')
+    quantity = models.DecimalField(max_digits=14, decimal_places=4, verbose_name='需拿数量')
+    unit = models.CharField(max_length=32, default='件', verbose_name='单位')
+    location_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='库位号')
+    picked_qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='实际拿到数量')
+    shortage_qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='缺货数量')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', verbose_name='状态')
+    image = models.CharField(max_length=255, blank=True, null=True, verbose_name='商品图片')
+    remark = models.CharField(max_length=255, blank=True, null=True, verbose_name='备注')
+
+    class Meta:
+        db_table = 'sales_picking_list_item'
+        verbose_name = '拣货明细'
+        verbose_name_plural = verbose_name
+        ordering = ['id']

@@ -4,20 +4,24 @@ from apps.system.models import User, Role, Menu, Department
 
 class UserSerializer(serializers.ModelSerializer):
     """
-    用户序列化器：包含部门名称、角色列表
+    用户序列化器：包含部门名称、角色列表、关联员工信息
     """
     dept_name = serializers.CharField(source='dept.name', read_only=True)
     role_names = serializers.SerializerMethodField(read_only=True)
     role_ids = serializers.PrimaryKeyRelatedField(
         source='roles', many=True, queryset=Role.objects.all(), required=False
     )
+    employee_id = serializers.IntegerField(source='employee_profile.id', read_only=True)
+    employee_name = serializers.CharField(source='employee_profile.name', read_only=True)
+    employee_no = serializers.CharField(source='employee_profile.employee_no', read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'phone', 'avatar',
-            'dept', 'dept_name', 'roles', 'role_ids', 'role_names',
-            'is_active', 'is_superuser', 'created_at', 'updated_at'
+            'dept', 'dept_name', 'role_ids', 'role_names',
+            'is_active', 'is_superuser', 'created_at', 'updated_at', 'password',
+            'employee_id', 'employee_name', 'employee_no',
         ]
         extra_kwargs = {
             'password': {'write_only': True},
@@ -32,18 +36,19 @@ class UserSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         roles = validated_data.pop('roles', [])
         user = super().create(validated_data)
-        if password:
+        if password is not None:
             user.set_password(password)
-            user.save()
         if roles:
             user.roles.set(roles)
+        if password is not None or roles:
+            user.save()
         return user
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
         roles = validated_data.pop('roles', None)
         user = super().update(instance, validated_data)
-        if password:
+        if password is not None:
             user.set_password(password)
             user.save()
         if roles is not None:
@@ -151,3 +156,14 @@ class DepartmentSerializer(serializers.ModelSerializer):
         for child in dept.children.filter(is_active=True):
             count += self._count_users(child)
         return count
+
+    def validate_parent(self, value):
+        if self.instance and value:
+            if value.id == self.instance.id:
+                raise serializers.ValidationError('上级部门不能选择自己')
+            parent = value.parent
+            while parent:
+                if parent.id == self.instance.id:
+                    raise serializers.ValidationError('上级部门不能选择自己的子部门')
+                parent = parent.parent
+        return value

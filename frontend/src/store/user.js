@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi, getUserInfo } from '@/api/auth'
+import { login as loginApi, getUserInfo, logout as logoutApi } from '@/api/auth'
 
 /**
  * 用户状态管理：Token、用户信息、登录/登出
@@ -25,9 +25,7 @@ export const useUserStore = defineStore(
       const res = await loginApi(credentials)
       token.value = res.data.access
       localStorage.setItem('erp_token', res.data.access)
-      // 同时存储refresh token
       localStorage.setItem('erp_refresh_token', res.data.refresh)
-      // 缓存菜单和权限，供动态路由和按钮权限使用
       menus.value = res.data.menus || []
       permissions.value = res.data.permissions || []
       userInfo.value = res.data.user
@@ -43,7 +41,6 @@ export const useUserStore = defineStore(
     const fetchUserInfo = async () => {
       const res = await getUserInfo()
       userInfo.value = res.data
-      // 同步后端最新菜单和权限，解决新增菜单后刷新页面404的问题
       if (res.data.menus) {
         menus.value = res.data.menus
         localStorage.setItem('erp_menus', JSON.stringify(res.data.menus))
@@ -74,7 +71,12 @@ export const useUserStore = defineStore(
     /**
      * 登出：清除所有状态
      */
-    const logout = () => {
+    const logout = async () => {
+      try {
+        await logoutApi()
+      } catch (e) {
+        // 忽略后端登出错误
+      }
       token.value = ''
       userInfo.value = null
       menus.value = []
@@ -91,7 +93,6 @@ export const useUserStore = defineStore(
      */
     const hasPermission = (perm) => {
       if (!perm) return true
-      // 超管默认拥有所有权限（后端也做了放行，这里前端做按钮级控制）
       if (userInfo.value?.is_superuser) return true
       return permissions.value.includes(perm)
     }
@@ -110,6 +111,6 @@ export const useUserStore = defineStore(
     }
   },
   {
-    persist: false, // 我们手动用 localStorage 控制，更灵活
+    persist: false,
   }
 )

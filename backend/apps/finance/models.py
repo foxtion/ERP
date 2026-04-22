@@ -141,30 +141,34 @@ class Counterparty(models.Model):
     @property
     def receivable_total(self):
         """应收总额"""
+        from decimal import Decimal
         from django.db.models import Sum
-        return self.receivables.filter(doc_type='receivable').aggregate(t=Sum('amount'))['t'] or 0
+        return self.receivables.filter(doc_type='receivable').aggregate(t=Sum('amount'))['t'] or Decimal('0')
 
     @property
     def receivable_unpaid(self):
         """应收未结金额"""
+        from decimal import Decimal
         from django.db.models import Sum, F
         return self.receivables.filter(doc_type='receivable').exclude(status='paid').aggregate(
             t=Sum(F('amount') - F('paid_amount'))
-        )['t'] or 0
+        )['t'] or Decimal('0')
 
     @property
     def payable_total(self):
         """应付总额"""
+        from decimal import Decimal
         from django.db.models import Sum
-        return self.receivables.filter(doc_type='payable').aggregate(t=Sum('amount'))['t'] or 0
+        return self.receivables.filter(doc_type='payable').aggregate(t=Sum('amount'))['t'] or Decimal('0')
 
     @property
     def payable_unpaid(self):
         """应付未结金额"""
+        from decimal import Decimal
         from django.db.models import Sum, F
         return self.receivables.filter(doc_type='payable').exclude(status='paid').aggregate(
             t=Sum(F('amount') - F('paid_amount'))
-        )['t'] or 0
+        )['t'] or Decimal('0')
 
 
 class ReceivablePayable(models.Model):
@@ -323,6 +327,7 @@ class Settlement(models.Model):
         verbose_name = '核销明细'
         verbose_name_plural = verbose_name
         ordering = ['-id']
+        unique_together = [['payment_receipt', 'receivable_payable']]
 
     def __str__(self):
         return f"{self.payment_receipt.doc_no} -> {self.receivable_payable.doc_no}: {self.amount}"

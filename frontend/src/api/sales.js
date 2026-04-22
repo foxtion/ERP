@@ -73,3 +73,38 @@ export function updateReturn(id, data) {
 export function deleteReturn(id) {
   return request({ url: `/sales/returns/${id}/`, method: 'delete' })
 }
+
+// ==================== 拣货单 ====================
+export function getPickingList(params) {
+  return request({ url: '/sales/pickings/', method: 'get', params })
+}
+export function getPickingDetail(id) {
+  return request({ url: `/sales/pickings/${id}/`, method: 'get' })
+}
+export function createPicking(data) {
+  return request({ url: '/sales/pickings/', method: 'post', data })
+}
+export function updatePicking(id, data) {
+  return request({ url: `/sales/pickings/${id}/`, method: 'put', data })
+}
+export function deletePicking(id) {
+  return request({ url: `/sales/pickings/${id}/`, method: 'delete' })
+}
+export function createPickingFromOrder(orderId) {
+  return request({ url: `/sales/orders/${orderId}/create-picking/`, method: 'post' })
+}
+export function assignPicking(id, assigneeId) {
+  return request({ url: `/sales/pickings/${id}/assign/`, method: 'post', data: { assignee_id: assigneeId } })
+}
+export function acceptPicking(id) {
+  return request({ url: `/sales/pickings/${id}/accept/`, method: 'post' })
+}
+export function pickItem(id, itemId, pickedQty, shortageQty) {
+  return request({ url: `/sales/pickings/${id}/pick-item/`, method: 'post', data: { item_id: itemId, picked_qty: pickedQty, shortage_qty: shortageQty } })
+}
+export function reportShortage(id, itemId, remark) {
+  return request({ url: `/sales/pickings/${id}/report-shortage/`, method: 'post', data: { item_id: itemId, remark } })
+}
+export function submitPicking(id) {
+  return request({ url: `/sales/pickings/${id}/submit/`, method: 'post' })
+}

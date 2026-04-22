@@ -80,10 +80,10 @@ const handleCommand = (command) => {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
-    }).then(() => {
-      userStore.logout()
+    }).then(async () => {
+      await userStore.logout()
       permissionStore.clearRoutes()
-      router.push('/login')
+      await router.push('/login')
       ElMessage.success('已退出登录')
     })
   } else if (command === 'profile') {

@@ -3,6 +3,7 @@ from rest_framework import generics, status, views
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.exceptions import AuthenticationFailed
 
 from apps.system.models import Role, Menu, Department
 from apps.system.serializers import (
@@ -13,6 +14,37 @@ from apps.system.filters import UserFilter
 from utils.response import success_response, error_response
 
 User = get_user_model()
+
+
+def get_user_menus(user):
+    if user.is_superuser:
+        queryset = Menu.objects.filter(is_active=True).exclude(menu_type='BUTTON')
+    else:
+        menu_ids = set()
+        for role in user.roles.all():
+            for menu in role.menus.filter(is_active=True).exclude(menu_type='BUTTON'):
+                menu_ids.add(menu.id)
+                parent = menu.parent
+                while parent:
+                    menu_ids.add(parent.id)
+                    parent = parent.parent
+        queryset = Menu.objects.filter(id__in=menu_ids).exclude(menu_type='BUTTON')
+    top_menus = queryset.filter(parent__isnull=True).order_by('sort_order', 'id')
+    return MenuSerializer(top_menus, many=True).data
+
+
+def get_user_permissions(user):
+    if user.is_superuser:
+        return list(Menu.objects.filter(
+            is_active=True, menu_type='BUTTON', permission__isnull=False
+        ).values_list('permission', flat=True))
+    perms = set()
+    for role in user.roles.all():
+        for menu in role.menus.filter(
+            is_active=True, menu_type='BUTTON', permission__isnull=False
+        ):
+            perms.add(menu.permission)
+    return list(perms)
 
 
 class LoginView(TokenObtainPairView):
@@ -26,14 +58,16 @@ class LoginView(TokenObtainPairView):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-        except Exception as exc:
+        except AuthenticationFailed:
             return error_response(message='用户名或密码错误', code=401)
+        except Exception as exc:
+            return error_response(message=str(exc), code=400)
 
         data = serializer.validated_data
         user = serializer.user
         user_data = UserSerializer(user).data
-        menus = self._get_user_menus(user)
-        permissions = self._get_user_permissions(user)
+        menus = get_user_menus(user)
+        permissions = get_user_permissions(user)
 
         return success_response(data={
             'access': data['access'],
@@ -42,35 +76,6 @@ class LoginView(TokenObtainPairView):
             'menus': menus,
             'permissions': permissions,
         }, message='登录成功')
-
-    def _get_user_menus(self, user):
-        if user.is_superuser:
-            queryset = Menu.objects.filter(is_active=True).exclude(menu_type='BUTTON')
-        else:
-            menu_ids = set()
-            for role in user.roles.all():
-                for menu in role.menus.filter(is_active=True).exclude(menu_type='BUTTON'):
-                    menu_ids.add(menu.id)
-                    parent = menu.parent
-                    while parent:
-                        menu_ids.add(parent.id)
-                        parent = parent.parent
-            queryset = Menu.objects.filter(id__in=menu_ids).exclude(menu_type='BUTTON')
-        top_menus = queryset.filter(parent__isnull=True).order_by('sort_order', 'id')
-        return MenuSerializer(top_menus, many=True).data
-
-    def _get_user_permissions(self, user):
-        if user.is_superuser:
-            return list(Menu.objects.filter(
-                is_active=True, menu_type='BUTTON', permission__isnull=False
-            ).values_list('permission', flat=True))
-        perms = set()
-        for role in user.roles.all():
-            for menu in role.menus.filter(
-                is_active=True, menu_type='BUTTON', permission__isnull=False
-            ):
-                perms.add(menu.permission)
-        return list(perms)
 
 
 class LogoutView(views.APIView):
@@ -85,15 +90,49 @@ class UserInfoView(views.APIView):
 
     def get(self, request):
         serializer = UserSerializer(request.user)
-        # 同时返回最新菜单和权限，解决刷新页面后菜单不同步的问题
-        login_view = LoginView()
-        menus = login_view._get_user_menus(request.user)
-        permissions = login_view._get_user_permissions(request.user)
+        menus = get_user_menus(request.user)
+        permissions = get_user_permissions(request.user)
         return success_response(data={
             **serializer.data,
             'menus': menus,
             'permissions': permissions,
         })
+
+
+class ChangePasswordView(views.APIView):
+    """
+    修改当前用户密码
+    POST /auth/change-password/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        if not old_password or not new_password:
+            return error_response(message='旧密码和新密码不能为空', code=400)
+        user = request.user
+        if not user.check_password(old_password):
+            return error_response(message='旧密码错误', code=400)
+        user.set_password(new_password)
+        user.save()
+        return success_response(message='密码修改成功')
+
+
+class CustomTokenRefreshView(views.APIView):
+    """
+    自定义Token刷新视图，统一响应格式
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+        serializer = TokenRefreshSerializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception as exc:
+            return error_response(message='刷新令牌无效或已过期', code=401)
+        return success_response(data=serializer.validated_data, message='刷新成功')
 
 
 # ==================== 统一包装响应格式的 Mixin ====================
@@ -213,7 +252,7 @@ class RoleMenuView(views.APIView):
     def put(self, request, pk):
         try:
             role = Role.objects.get(pk=pk)
-            menu_ids = request.data.get('menu_ids', [])
+            menu_ids = request.data.get('menu_ids') or []
             role.menus.set(menu_ids)
             return success_response(message='角色菜单权限更新成功')
         except Role.DoesNotExist:
@@ -336,3 +375,11 @@ class DepartmentRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpd
     def perform_destroy(self, instance):
         instance.is_active = False
         instance.save()
+        # 级联软删除所有子部门
+        self._cascade_delete_children(instance)
+
+    def _cascade_delete_children(self, dept):
+        for child in dept.children.filter(is_active=True):
+            child.is_active = False
+            child.save()
+            self._cascade_delete_children(child)

@@ -1,5 +1,6 @@
 from rest_framework import generics, views
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 from django.utils import timezone
 from apps.system.permissions import RBACPermission
 from utils.response import success_response, error_response
@@ -351,6 +352,7 @@ class MaterialRequisitionIssueView(views.APIView):
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'production:requisition:edit'
 
+    @transaction.atomic
     def post(self, request, pk):
         try:
             req = MaterialRequisition.objects.prefetch_related('items').get(pk=pk)
@@ -367,10 +369,11 @@ class MaterialRequisitionIssueView(views.APIView):
 
         for item in req.items.all():
             issue_qty = item.actual_quantity if item.actual_quantity and item.actual_quantity > 0 else item.quantity
-            # 查找库存记录
-            inv = Inventory.objects.filter(warehouse=warehouse, material_name=item.material_name).first()
+            spec = item.spec or ''
+            # 查找库存记录（按仓库+物料名称+规格）
+            inv = Inventory.objects.select_for_update().filter(warehouse=warehouse, material_name=item.material_name, spec=spec).first()
             if not inv:
-                return error_response(message=f'物料 "{item.material_name}" 在仓库 "{req.warehouse}" 中无库存记录', code=400)
+                return error_response(message=f'物料 "{item.material_name}({spec})" 在仓库 "{req.warehouse}" 中无库存记录', code=400)
             if inv.qty < issue_qty:
                 return error_response(
                     message=f'物料 "{item.material_name}" 库存不足，当前库存 {inv.qty}，需要出库 {issue_qty}',
@@ -395,13 +398,26 @@ class MaterialRequisitionCancelView(views.APIView):
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'production:requisition:edit'
 
+    @transaction.atomic
     def post(self, request, pk):
         try:
-            req = MaterialRequisition.objects.get(pk=pk)
+            req = MaterialRequisition.objects.prefetch_related('items').get(pk=pk)
         except MaterialRequisition.DoesNotExist:
             return error_response(message='领料单不存在', code=404)
         if req.status in ['closed', 'cancelled']:
             return error_response(message='已关闭或已取消的领料单无法再次取消', code=400)
+        # 已出库的领料单取消时回滚库存
+        if req.status == 'issued':
+            from apps.inventory.models import Warehouse, Inventory
+            warehouse = Warehouse.objects.filter(name=req.warehouse).first()
+            if warehouse:
+                for item in req.items.all():
+                    issue_qty = item.actual_quantity if item.actual_quantity and item.actual_quantity > 0 else item.quantity
+                    spec = item.spec or ''
+                    inv = Inventory.objects.select_for_update().filter(warehouse=warehouse, material_name=item.material_name, spec=spec).first()
+                    if inv:
+                        inv.qty += issue_qty
+                        inv.save()
         req.status = 'cancelled'
         req.save()
         serializer = MaterialRequisitionSerializer(req)
@@ -642,6 +658,7 @@ class ProductionInStockConfirmView(views.APIView):
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'production:instock:edit'
 
+    @transaction.atomic
     def post(self, request, pk):
         try:
             instock = ProductionInStock.objects.get(pk=pk)
@@ -678,13 +695,25 @@ class ProductionInStockCancelView(views.APIView):
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'production:instock:edit'
 
+    @transaction.atomic
     def post(self, request, pk):
         try:
             instock = ProductionInStock.objects.get(pk=pk)
         except ProductionInStock.DoesNotExist:
             return error_response(message='入库单不存在', code=404)
-        if instock.status in ['confirmed', 'closed', 'cancelled']:
-            return error_response(message='已入库/已关闭/已取消的入库单无法再次取消', code=400)
+        if instock.status == 'cancelled':
+            return error_response(message='已取消的入库单无法再次取消', code=400)
+        # 已入库的取消时回滚库存
+        if instock.status == 'confirmed':
+            from apps.inventory.models import Warehouse, Inventory
+            warehouse = Warehouse.objects.filter(name=instock.warehouse).first()
+            if warehouse:
+                inv = Inventory.objects.select_for_update().filter(warehouse=warehouse, material_name=instock.product_name, spec='').first()
+                if inv:
+                    inv.qty -= instock.actual_quantity if instock.actual_quantity else instock.quantity
+                    if inv.qty < 0:
+                        inv.qty = 0
+                    inv.save()
         instock.status = 'cancelled'
         instock.save()
         serializer = ProductionInStockSerializer(instock)

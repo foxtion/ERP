@@ -13,13 +13,13 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+          <el-button :icon="RefreshLeft" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
 
       <div class="toolbar">
-        <el-button v-permission="'system:role:add'" type="primary" @click="handleAdd">新增角色</el-button>
+        <el-button v-permission="'system:role:add'" type="primary" :icon="Plus" @click="handleAdd">新增角色</el-button>
       </div>
 
       <el-table :data="tableData" border stripe>
@@ -29,9 +29,9 @@
         <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <el-button v-permission="'system:role:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'system:role:edit'" link type="success" @click="handleAssignMenu(row)">分配菜单</el-button>
-            <el-button v-permission="'system:role:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-permission="'system:role:edit'" link type="primary" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
+            <el-button v-permission="'system:role:edit'" link type="success" :icon="Setting" @click="handleAssignMenu(row)">分配菜单</el-button>
+            <el-button v-permission="'system:role:delete'" link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -91,6 +91,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, RefreshLeft, Plus, Edit, Delete, Setting } from '@element-plus/icons-vue'
 import { getRoleList, createRole, updateRole, deleteRole, getRoleMenus, updateRoleMenus } from '@/api/system'
 import { getMenuFlat } from '@/api/system'
 

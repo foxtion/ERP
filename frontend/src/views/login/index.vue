@@ -37,6 +37,9 @@
             登 录
           </el-button>
         </el-form-item>
+        <div class="login-tips">
+          <el-text type="info" size="small">初始用户名：员工姓名 &nbsp;|&nbsp; 初始密码：员工编号</el-text>
+        </div>
       </el-form>
     </el-card>
   </div>
@@ -70,31 +73,33 @@ const loginRules = {
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-  await loginFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    loading.value = true
-    try {
-      const res = await userStore.login({
-        username: loginForm.username,
-        password: loginForm.password,
+  try {
+    await loginFormRef.value.validate()
+  } catch (e) {
+    return
+  }
+  loading.value = true
+  try {
+    const res = await userStore.login({
+      username: loginForm.username,
+      password: loginForm.password,
+    })
+    if (res.data.menus && res.data.menus.length > 0) {
+      const accessRoutes = permissionStore.generateRoutes(res.data.menus)
+      accessRoutes.forEach((r) => {
+        if (!router.hasRoute(r.name)) {
+          router.addRoute(r)
+        }
       })
-      if (res.data.menus && res.data.menus.length > 0) {
-        const accessRoutes = permissionStore.generateRoutes(res.data.menus)
-        accessRoutes.forEach((r) => {
-          if (!router.hasRoute(r.name)) {
-            router.addRoute(r)
-          }
-        })
-      }
-      ElMessage.success('登录成功')
-      const redirect = route.query.redirect || '/'
-      router.push(redirect)
-    } catch (error) {
-      console.error(error)
-    } finally {
-      loading.value = false
     }
-  })
+    ElMessage.success('登录成功')
+    const redirect = route.query.redirect || '/'
+    router.push(redirect)
+  } catch (error) {
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -125,5 +130,10 @@ const handleLogin = async () => {
   width: 100%;
   height: 40px;
   font-size: 16px;
+}
+
+.login-tips {
+  text-align: center;
+  margin-top: 8px;
 }
 </style>

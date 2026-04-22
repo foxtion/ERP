@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from django.db.models import ProtectedError
+from django.db import transaction
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from rest_framework import generics, views, status
@@ -22,7 +23,7 @@ from apps.purchase.filters import SupplierFilter
 
 
 class SupplierListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
-    queryset = Supplier.objects.all().order_by('-id')
+    queryset = Supplier.objects.filter(is_active=True).order_by('-id')
     serializer_class = SupplierSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'purchase:supplier:view'
@@ -51,11 +52,8 @@ class SupplierRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdat
         return super().get_permissions()
 
     def perform_destroy(self, instance):
-        try:
-            instance.is_active = False
-            instance.save()
-        except ProtectedError:
-            raise error_response(message='该供应商已被采购订单引用，无法删除', code=400)
+        instance.is_active = False
+        instance.save()
 
 
 class SupplierToggleStatusView(views.APIView):
@@ -86,7 +84,7 @@ class SupplierExportView(views.APIView):
     required_permission = 'purchase:supplier:view'
 
     def get(self, request):
-        queryset = Supplier.objects.all().order_by('-id')
+        queryset = Supplier.objects.filter(is_active=True).order_by('-id')
         keyword = request.query_params.get('keyword')
         is_active = request.query_params.get('is_active')
         if keyword:
@@ -222,6 +220,7 @@ class PurchaseRequestListCreateView(CreateResponseMixin, generics.ListCreateAPIV
     required_permission = 'purchase:request:view'
     search_fields = ['request_no']
     filterset_fields = ['status']
+    pagination_class = StandardPagination
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -244,6 +243,69 @@ class PurchaseRequestRetrieveUpdateDestroyView(RUDResponseMixin, generics.Retrie
             self.required_permission = 'purchase:request:view'
         return super().get_permissions()
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != 'draft':
+            return error_response(message='只有草稿状态的申请单可以编辑', code=400)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != 'draft':
+            return error_response(message='只有草稿状态的申请单可以删除', code=400)
+        return super().destroy(request, *args, **kwargs)
+
+
+class PurchaseRequestSubmitView(views.APIView):
+    """提交采购申请：draft → pending"""
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:request:edit'
+
+    def post(self, request, pk):
+        try:
+            req = PurchaseRequest.objects.get(pk=pk)
+        except PurchaseRequest.DoesNotExist:
+            return error_response(message='采购申请不存在', code=404)
+        if req.status != 'draft':
+            return error_response(message='只有草稿状态的申请单可以提交', code=400)
+        req.status = 'pending'
+        req.save()
+        return success_response(data={'id': pk, 'status': req.status}, message='提交成功')
+
+
+class PurchaseRequestApproveView(views.APIView):
+    """审批采购申请：pending → approved"""
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:request:edit'
+
+    def post(self, request, pk):
+        try:
+            req = PurchaseRequest.objects.get(pk=pk)
+        except PurchaseRequest.DoesNotExist:
+            return error_response(message='采购申请不存在', code=404)
+        if req.status != 'pending':
+            return error_response(message='只有待审批状态的申请单可以审批', code=400)
+        req.status = 'approved'
+        req.save()
+        return success_response(data={'id': pk, 'status': req.status}, message='审批通过')
+
+
+class PurchaseRequestRejectView(views.APIView):
+    """驳回采购申请：pending → draft"""
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'purchase:request:edit'
+
+    def post(self, request, pk):
+        try:
+            req = PurchaseRequest.objects.get(pk=pk)
+        except PurchaseRequest.DoesNotExist:
+            return error_response(message='采购申请不存在', code=404)
+        if req.status != 'pending':
+            return error_response(message='只有待审批状态的申请单可以驳回', code=400)
+        req.status = 'draft'
+        req.save()
+        return success_response(data={'id': pk, 'status': req.status}, message='已驳回')
+
 
 class PurchaseOrderListCreateView(CreateResponseMixin, generics.ListCreateAPIView):
     queryset = PurchaseOrder.objects.all().order_by('-id')
@@ -252,6 +314,7 @@ class PurchaseOrderListCreateView(CreateResponseMixin, generics.ListCreateAPIVie
     required_permission = 'purchase:order:view'
     search_fields = ['order_no', 'supplier__name']
     filterset_fields = ['status']
+    pagination_class = StandardPagination
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -293,6 +356,7 @@ class PurchaseInStockListCreateView(CreateResponseMixin, generics.ListCreateAPIV
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'purchase:instock:view'
     search_fields = ['stock_no', 'order__order_no']
+    pagination_class = StandardPagination
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -362,6 +426,9 @@ class PurchaseOrderCancelView(views.APIView):
             return error_response(message='采购订单不存在', code=404)
         if order.status not in ('draft', 'confirmed'):
             return error_response(message='只有草稿或已确认状态的订单可以取消', code=400)
+        # 校验是否已有入库记录
+        if order.purchaseinstock_set.exists():
+            return error_response(message='该订单已存在入库记录，不能取消', code=400)
         order.status = 'cancelled'
         order.save()
         return success_response(data={'id': pk, 'status': order.status}, message='订单取消成功')
@@ -381,6 +448,10 @@ class PurchaseOrderCompleteView(views.APIView):
             return error_response(message='采购订单不存在', code=404)
         if order.status not in ('confirmed', 'partial'):
             return error_response(message='只有已确认或部分入库状态的订单可以手动完成', code=400)
+        # 校验是否全部入库
+        for item in order.items.all():
+            if (item.received_qty or 0) < (item.quantity or 0):
+                return error_response(message='订单仍有未入库物料，不能手动完成', code=400)
         order.status = 'completed'
         order.save()
         return success_response(data={'id': pk, 'status': order.status}, message='订单已完成')
@@ -458,6 +529,7 @@ class PurchaseRequestConvertView(views.APIView):
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'purchase:order:add'
 
+    @transaction.atomic
     def post(self, request, pk):
         try:
             req = PurchaseRequest.objects.prefetch_related('items').get(pk=pk)
@@ -481,6 +553,9 @@ class PurchaseRequestConvertView(views.APIView):
             supplier = Supplier.objects.get(pk=supplier_id)
         except Supplier.DoesNotExist:
             return error_response(message='供应商不存在', code=400)
+
+        if not supplier.is_active:
+            return error_response(message='该供应商已被禁用，不能下订单', code=400)
 
         if PurchaseOrder.objects.filter(order_no=order_no).exists():
             return error_response(message='订单编号已存在', code=400)

@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.contrib.auth import get_user_model
 
 
 class Employee(models.Model):
@@ -46,6 +47,13 @@ class Employee(models.Model):
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='active', verbose_name='状态')
     address = models.CharField(max_length=255, blank=True, null=True, verbose_name='地址')
     remark = models.TextField(blank=True, null=True, verbose_name='备注')
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='employee_profile',
+        verbose_name='系统用户'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -65,6 +73,65 @@ class Employee(models.Model):
         from datetime import date
         today = date.today()
         return today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
+
+    def _generate_username(self, base_name):
+        """基于员工姓名生成唯一用户名，重名时自动加序号后缀"""
+        User = get_user_model()
+        if not User.objects.filter(username=base_name).exists():
+            return base_name
+        seq = 1
+        while True:
+            candidate = f'{base_name}{seq}'
+            if not User.objects.filter(username=candidate).exists():
+                return candidate
+            seq += 1
+
+    def sync_user(self):
+        """
+        将员工档案信息同步到关联的系统用户。
+        - 不存在则自动创建
+        - 用户名跟随员工姓名（重名自动加后缀）
+        - 密码重置为员工编号（仅在创建时）
+        - 在职状态同步到 is_active
+        """
+        User = get_user_model()
+        if self.user:
+            user = self.user
+            # 同步用户名（如果姓名发生变化且当前用户名不是由其他规则定制的，也同步）
+            if user.username != self.name and not User.objects.filter(username=self.name).exists():
+                # 优先尝试直接使用姓名，若冲突则生成唯一名
+                user.username = self._generate_username(self.name)
+            elif user.username != self.name:
+                user.username = self._generate_username(self.name)
+            user.email = self.email or user.email
+            user.phone = self.phone or user.phone
+            user.is_active = self.status != 'resigned'
+            user.save(update_fields=['username', 'email', 'phone', 'is_active'])
+        else:
+            # 创建新用户
+            username = self._generate_username(self.name)
+            user = User(
+                username=username,
+                email=self.email or '',
+                phone=self.phone or '',
+                is_active=self.status != 'resigned',
+            )
+            user.set_password(self.employee_no)
+            user.save()
+            self.user = user
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        need_update_fk = self.user is None
+        self.sync_user()
+        # sync_user 创建了新用户时，需要把外键写回数据库（避免递归 save）
+        if need_update_fk and self.user:
+            Employee.objects.filter(pk=self.pk).update(user=self.user)
+
+    def delete(self, *args, **kwargs):
+        if self.user:
+            self.user.delete()
+        super().delete(*args, **kwargs)
 
 
 class Attendance(models.Model):
@@ -149,7 +216,7 @@ class Attendance(models.Model):
                 in_dt = datetime.combine(datetime.today(), check_in)
                 out_dt = datetime.combine(datetime.today(), check_out)
                 if out_dt < in_dt:
-                    out_dt = datetime.combine(datetime.today(), time(23, 59, 59))
+                    out_dt += timedelta(days=1)
                 diff_hours = (out_dt - in_dt).total_seconds() / 3600
                 # 扣除午休1小时（如果工作时长大于5小时）
                 if diff_hours > 5:
@@ -191,6 +258,7 @@ class Salary(models.Model):
         verbose_name = '薪资管理'
         verbose_name_plural = verbose_name
         ordering = ['-id']
+        unique_together = [['employee', 'year_month']]
 
     def save(self, *args, **kwargs):
         self.total_salary = (self.base_salary or 0) + (self.bonus or 0) - (self.deduction or 0)

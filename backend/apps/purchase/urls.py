@@ -10,6 +10,9 @@ urlpatterns = [
 
     path('requests/', views.PurchaseRequestListCreateView.as_view(), name='request_list'),
     path('requests/<int:pk>/', views.PurchaseRequestRetrieveUpdateDestroyView.as_view(), name='request_detail'),
+    path('requests/<int:pk>/submit/', views.PurchaseRequestSubmitView.as_view(), name='request_submit'),
+    path('requests/<int:pk>/approve/', views.PurchaseRequestApproveView.as_view(), name='request_approve'),
+    path('requests/<int:pk>/reject/', views.PurchaseRequestRejectView.as_view(), name='request_reject'),
 
     path('orders/', views.PurchaseOrderListCreateView.as_view(), name='order_list'),
     path('orders/export/', views.PurchaseOrderExportView.as_view(), name='order_export'),

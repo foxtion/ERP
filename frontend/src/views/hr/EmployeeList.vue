@@ -41,7 +41,15 @@
           <el-input v-model="searchForm.search" placeholder="工号/姓名/手机号" clearable style="width: 160px" />
         </el-form-item>
         <el-form-item label="部门">
-          <el-input v-model="searchForm.department" placeholder="请输入部门" clearable style="width: 130px" />
+          <el-tree-select
+            v-model="searchForm.department"
+            :data="deptTreeData"
+            :props="{ label: 'name', value: 'name', children: 'children' }"
+            check-strictly
+            clearable
+            placeholder="请选择部门"
+            style="width: 130px"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部" clearable style="width: 100px">
@@ -105,6 +113,12 @@
         <el-table-column prop="status" label="状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="username" label="系统账号" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.username" size="small" type="success">{{ row.username }}</el-tag>
+            <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
@@ -198,7 +212,15 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="部门">
-              <el-input v-model="form.department" placeholder="请输入部门" />
+              <el-tree-select
+                v-model="form.department"
+                :data="deptTreeData"
+                :props="{ label: 'name', value: 'name', children: 'children' }"
+                check-strictly
+                clearable
+                placeholder="请选择部门"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -313,6 +335,10 @@
         <el-descriptions-item label="状态">
           <el-tag :type="statusType(currentRow.status)">{{ statusText(currentRow.status) }}</el-tag>
         </el-descriptions-item>
+        <el-descriptions-item label="系统账号">
+          <el-tag v-if="currentRow.username" size="small" type="success">{{ currentRow.username }}</el-tag>
+          <span v-else>-</span>
+        </el-descriptions-item>
         <el-descriptions-item label="地址">{{ currentRow.address || '-' }}</el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ currentRow.remark || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -327,12 +353,14 @@ import {
   getEmployeeList, createEmployee, updateEmployee, deleteEmployee,
   generateEmployeeNo, confirmEmployee, resignEmployee, getEmployeeStats
 } from '@/api/hr'
+import { getDeptTree } from '@/api/system'
 
 const tableData = ref([])
 const total = ref(0)
 const loading = ref(false)
 const query = ref({ page: 1, size: 10 })
 const stats = ref({})
+const deptTreeData = ref([])
 
 const searchForm = reactive({
   search: '',
@@ -410,7 +438,13 @@ const fetchStats = async () => {
 onMounted(() => {
   fetchData()
   fetchStats()
+  fetchDeptTree()
 })
+
+const fetchDeptTree = async () => {
+  const res = await getDeptTree()
+  deptTreeData.value = res.data
+}
 
 const handleSearch = () => {
   query.value.page = 1
@@ -471,11 +505,18 @@ const handleSubmit = async () => {
     if (!valid) return
     submitLoading.value = true
     try {
+      const payload = { ...form.value }
+      const dateFields = ['birth_date', 'entry_date', 'probation_end_date', 'contract_end_date', 'resignation_date']
+      dateFields.forEach(field => {
+        if (!payload[field]) {
+          payload[field] = null
+        }
+      })
       if (isEdit.value) {
-        await updateEmployee(currentId.value, form.value)
+        await updateEmployee(currentId.value, payload)
         ElMessage.success('更新成功')
       } else {
-        await createEmployee(form.value)
+        await createEmployee(payload)
         ElMessage.success('新增成功')
       }
       dialogVisible.value = false
