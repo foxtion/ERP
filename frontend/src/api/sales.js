@@ -39,6 +39,12 @@ export function deleteSalesOrder(id) {
 export function getSalesOrderOptions() {
   return request({ url: '/sales/orders/options/', method: 'get' })
 }
+export function confirmOrder(id) {
+  return request({ url: `/sales/orders/${id}/confirm/`, method: 'post' })
+}
+export function cancelOrder(id) {
+  return request({ url: `/sales/orders/${id}/cancel/`, method: 'post' })
+}
 
 // ==================== 销售出库 ====================
 export function getOutStockList(params) {

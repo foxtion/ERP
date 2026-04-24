@@ -94,7 +94,13 @@ export const useUserStore = defineStore(
     const hasPermission = (perm) => {
       if (!perm) return true
       if (userInfo.value?.is_superuser) return true
-      return permissions.value.includes(perm)
+      if (permissions.value.includes(perm)) return true
+      // 有部门的员工，默认拥有 :job / :operate 类操作权限
+      const dept = userInfo.value?.dept_name || userInfo.value?.department
+      if (dept && perm && (perm.endsWith(':job') || perm.endsWith(':operate'))) {
+        return true
+      }
+      return false
     }
 
     return {

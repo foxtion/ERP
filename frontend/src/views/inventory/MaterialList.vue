@@ -30,6 +30,30 @@
         <el-table-column prop="category" label="分类" width="100" align="center" />
         <el-table-column prop="unit" label="单位" width="80" align="center" />
         <el-table-column prop="barcode" label="条码" min-width="120" />
+        <el-table-column label="大库位" width="120" align="center">
+          <template #default="{ row }">
+            <span v-if="row.large_location">{{ row.large_location }}</span>
+            <el-button
+              v-if="row.large_location"
+              link
+              type="danger"
+              size="small"
+              @click="clearLocation(row, 'large')"
+            >删除</el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="小库位" width="120" align="center">
+          <template #default="{ row }">
+            <span v-if="row.small_location">{{ row.small_location }}</span>
+            <el-button
+              v-if="row.small_location && isAdmin"
+              link
+              type="danger"
+              size="small"
+              @click="clearLocation(row, 'small')"
+            >删除</el-button>
+          </template>
+        </el-table-column>
         <el-table-column prop="qty" label="库存数量" width="120" align="right">
           <template #default="{ row }">
             <el-tag :type="Number(row.qty) > 0 ? 'success' : 'info'">{{ Number(row.qty).toFixed(0) }}</el-tag>
@@ -50,7 +74,13 @@
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button v-permission="'inventory:material:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'inventory:material:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              v-if="isAdmin"
+              v-permission="'inventory:material:delete'"
+              link
+              type="danger"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -69,6 +99,20 @@
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form-item label="选择库位">
+          <el-select-v2
+            v-model="selectedLocation"
+            :options="locationProductOptions"
+            placeholder="搜索库位编码/货物编码/名称/条码"
+            clearable
+            filterable
+            remote
+            :remote-method="searchLocationProducts"
+            :loading="locationProductLoading"
+            style="width: 100%"
+            @change="onLocationSelect"
+          />
+        </el-form-item>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="物料编码" prop="code">
@@ -115,6 +159,30 @@
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="大库位">
+              <el-select-v2
+                v-model="form.large_location"
+                :options="largeOptions"
+                placeholder="请选择大库位"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="小库位">
+              <el-select-v2
+                v-model="form.small_location"
+                :options="smallOptions"
+                placeholder="请选择小库位"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
             <el-form-item label="库存数量">
               <el-input-number v-model="form.qty" :min="0" :precision="0" :controls="false" style="width: 100%" />
             </el-form-item>
@@ -127,12 +195,12 @@
         </el-row>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
-            <el-radio label="active">启用</el-radio>
-            <el-radio label="inactive">停用</el-radio>
+            <el-radio value="active">启用</el-radio>
+            <el-radio value="inactive">停用</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" rows="2" />
+          <el-input v-model="form.remark" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -144,11 +212,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  getMaterialList, createMaterial, updateMaterial, deleteMaterial
+  getMaterialList, createMaterial, updateMaterial, patchMaterial, deleteMaterial,
+  getLocationOptions, getLocationProducts
 } from '@/api/inventory'
+import { useUserStore } from '@/store/user'
+
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.is_superuser)
 
 const tableData = ref([])
 const total = ref(0)
@@ -161,8 +234,20 @@ const formRef = ref(null)
 const isEdit = ref(false)
 const currentId = ref(null)
 
+const largeLocations = ref([])
+const smallLocations = ref([])
+const largeOptions = computed(() => largeLocations.value.map(loc => ({ label: loc, value: loc })))
+const smallOptions = computed(() => smallLocations.value.map(loc => ({ label: loc, value: loc })))
+
+const selectedLocation = ref(null)
+const locationProductOptions = ref([])
+const locationProductLoading = ref(false)
+const locationProductMap = ref(new Map())
+
 const form = ref({
-  code: '', name: '', spec: '', category: '', unit: '件', barcode: '', qty: 0, warning_threshold: 50, status: 'active', remark: ''
+  code: '', name: '', spec: '', category: '', unit: '件', barcode: '',
+  large_location: '', small_location: '',
+  qty: 0, warning_threshold: 50, status: 'active', remark: ''
 })
 
 const rules = {
@@ -179,7 +264,20 @@ const fetchData = async () => {
   total.value = res.data.pagination.total
 }
 
-onMounted(fetchData)
+const fetchLocations = async () => {
+  try {
+    const res = await getLocationOptions()
+    largeLocations.value = res.data.large || []
+    smallLocations.value = res.data.small || []
+  } catch (e) {
+    // ignore
+  }
+}
+
+onMounted(() => {
+  fetchData()
+  fetchLocations()
+})
 
 const resetQuery = () => {
   query.value = { page: 1, size: 20, search: '', category: '', status: '' }
@@ -187,9 +285,50 @@ const resetQuery = () => {
 }
 
 const resetForm = () => {
-  form.value = { code: '', name: '', spec: '', category: '', unit: '件', barcode: '', qty: 0, warning_threshold: 50, status: 'active', remark: '' }
+  form.value = {
+    code: '', name: '', spec: '', category: '', unit: '件', barcode: '',
+    large_location: '', small_location: '',
+    qty: 0, warning_threshold: 50, status: 'active', remark: ''
+  }
   currentId.value = null
   isEdit.value = false
+  selectedLocation.value = null
+  locationProductMap.value = new Map()
+}
+
+const searchLocationProducts = async (queryStr) => {
+  if (!queryStr || queryStr.length < 1) {
+    locationProductOptions.value = []
+    return
+  }
+  locationProductLoading.value = true
+  try {
+    const res = await getLocationProducts({ search: queryStr })
+    const list = res.data || []
+    locationProductMap.value = new Map(list.map(item => [item.id, item]))
+    locationProductOptions.value = list.map(item => ({
+      label: `${item.location_code} | ${item.product_code} ${item.product_name}`,
+      value: item.id
+    }))
+  } finally {
+    locationProductLoading.value = false
+  }
+}
+
+const onLocationSelect = (val) => {
+  if (!val) return
+  const item = locationProductMap.value.get(val)
+  if (!item) return
+  form.value.code = item.product_code || ''
+  form.value.name = item.product_name || ''
+  form.value.barcode = item.barcode || ''
+  if (item.size === '小') {
+    form.value.small_location = item.location_code
+    form.value.large_location = ''
+  } else {
+    form.value.large_location = item.location_code
+    form.value.small_location = ''
+  }
 }
 
 const handleAdd = () => {
@@ -203,7 +342,18 @@ const handleEdit = (row) => {
   dialogTitle.value = '编辑物料'
   isEdit.value = true
   currentId.value = row.id
-  Object.assign(form.value, row)
+  form.value.code = row.code || ''
+  form.value.name = row.name || ''
+  form.value.spec = row.spec || ''
+  form.value.category = row.category || ''
+  form.value.unit = row.unit || '件'
+  form.value.barcode = row.barcode || ''
+  form.value.large_location = row.large_location || ''
+  form.value.small_location = row.small_location || ''
+  form.value.qty = Number(row.qty || 0)
+  form.value.warning_threshold = Number(row.warning_threshold || 50)
+  form.value.status = row.status || 'active'
+  form.value.remark = row.remark || ''
   dialogVisible.value = true
 }
 
@@ -222,9 +372,26 @@ const handleSubmit = async () => {
       }
       dialogVisible.value = false
       await fetchData()
+    } catch (e) {
+      console.error('Submit error:', e)
+      console.error('Response:', e?.response)
+      console.error('Response data:', e?.response?.data)
+      console.error('Response status:', e?.response?.status)
+      const msg = e?.response?.data?.message || e?.response?.data?.detail || JSON.stringify(e?.response?.data) || e?.message || '提交失败'
+      ElMessage.error(msg)
     } finally {
       submitLoading.value = false
     }
+  })
+}
+
+const clearLocation = async (row, type) => {
+  const fieldName = type === 'large' ? '大库位' : '小库位'
+  const fieldKey = type === 'large' ? 'large_location' : 'small_location'
+  ElMessageBox.confirm(`确定清空${fieldName} "${row[fieldKey]}" 吗？`, '提示', { type: 'warning' }).then(async () => {
+    await patchMaterial(row.id, { [fieldKey]: null })
+    ElMessage.success('清空成功')
+    await fetchData()
   })
 }
 

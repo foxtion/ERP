@@ -73,9 +73,15 @@
         <el-table-column prop="material_code" label="商品代码" width="120" />
         <el-table-column prop="material_name" label="商品名称" min-width="150" />
         <el-table-column prop="spec" label="规格" width="100" />
-        <el-table-column prop="quantity" label="需拿数量" width="90" align="right" />
-        <el-table-column prop="picked_qty" label="已拿数量" width="90" align="right" />
-        <el-table-column prop="shortage_qty" label="缺货数量" width="90" align="right" />
+        <el-table-column label="需拿数量" width="90" align="right">
+          <template #default="{ row }">{{ fmtInt(row.quantity) }}</template>
+        </el-table-column>
+        <el-table-column label="已拿数量" width="90" align="right">
+          <template #default="{ row }">{{ fmtInt(row.picked_qty) }}</template>
+        </el-table-column>
+        <el-table-column label="缺货数量" width="90" align="right">
+          <template #default="{ row }">{{ fmtInt(row.shortage_qty) }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="80" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="row.status === 'picked' ? 'success' : row.status === 'shortage' ? 'danger' : 'info'">
@@ -104,13 +110,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getPickingList, getPickingDetail, assignPicking, acceptPicking } from '@/api/sales'
 import { getUserList } from '@/api/system'
 import { useRouter } from 'vue-router'
+import { useUserStore } from '@/store/user'
 
 const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.is_superuser)
 const tableData = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -149,13 +158,20 @@ const fetchData = async () => {
 }
 
 const fetchUsers = async () => {
-  const res = await getUserList({ size: 999 })
-  userList.value = res.data.list
+  try {
+    const res = await getUserList({ size: 999 })
+    userList.value = res.data.list
+  } catch (e) {
+    // 非管理员可能没有 system:user:view 权限，静默忽略
+    userList.value = []
+  }
 }
 
 onMounted(() => {
   fetchData()
-  fetchUsers()
+  if (isAdmin.value) {
+    fetchUsers()
+  }
 })
 
 const resetQuery = () => {
@@ -197,8 +213,14 @@ const handleAccept = async (row) => {
     ElMessage.success('接单成功')
     await fetchData()
   } catch (e) {
-    // ignore
+    ElMessage.error(e?.response?.data?.message || e?.message || '接单失败')
   }
+}
+
+// 格式化数量为纯整数（去掉小数）
+const fmtInt = (val) => {
+  if (val === null || val === undefined || val === '') return '0'
+  return String(Math.floor(Number(val)))
 }
 
 const handleGoJob = (row) => {

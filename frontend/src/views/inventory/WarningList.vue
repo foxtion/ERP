@@ -88,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getWarningList, handleWarning, getWarningStats } from '@/api/inventory'
 
@@ -130,6 +130,11 @@ const handleMark = async (row) => {
 }
 
 onMounted(() => {
+  fetchData()
+  fetchStats()
+})
+
+onActivated(() => {
   fetchData()
   fetchStats()
 })

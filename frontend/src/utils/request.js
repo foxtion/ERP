@@ -84,7 +84,7 @@ request.interceptors.response.use(
     }
     const res = response.data
     // 后端统一格式：{ code, message, data }
-    if (res.code !== undefined && !(res.code >= 200 && res.code < 300)) {
+    if (typeof res.code === 'number' && !(res.code >= 200 && res.code < 300)) {
       ElMessage.error(res.message || '请求失败')
       const err = new Error(res.message || '请求失败')
       err.response = response

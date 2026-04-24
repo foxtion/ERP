@@ -15,12 +15,38 @@ class MaterialSerializer(serializers.ModelSerializer):
     def get_warning_status_display(self, obj):
         return '预警' if obj.qty <= obj.warning_threshold else '正常'
 
+    def _validate_location(self, value, size_label, size_code):
+        if value == '' or value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        if not WarehouseLocation.objects.filter(location_code=value, size=size_code).exists():
+            raise serializers.ValidationError(f'{size_label} {value} 不存在于库位管理中')
+        return value
+
+    def validate_large_location(self, value):
+        return self._validate_location(value, '大库位', '大')
+
+    def validate_small_location(self, value):
+        value = self._validate_location(value, '小库位', '小')
+        if value is None:
+            return None
+        # 检查是否已被其他物料占用
+        instance = getattr(self, 'instance', None)
+        queryset = Material.objects.filter(small_location=value)
+        if instance:
+            queryset = queryset.exclude(pk=instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError(f'小库位 {value} 已被物料 {queryset.first().code} 占用')
+        return value
+
 
 class StockWarningSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     handler_name = serializers.CharField(source='handler.username', read_only=True)
     status_display = serializers.SerializerMethodField(read_only=True)
-    material_code = serializers.CharField(source='material.code', read_only=True, default='')
+    material_code = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = StockWarning
@@ -28,6 +54,20 @@ class StockWarningSerializer(serializers.ModelSerializer):
 
     def get_status_display(self, obj):
         return dict(StockWarning.STATUS_CHOICES).get(obj.status, obj.status)
+
+    def get_material_code(self, obj):
+        # 优先从模型字段读取
+        if getattr(obj, 'material_code', None):
+            return obj.material_code
+        # 其次从关联物料读取
+        if obj.material:
+            return obj.material.code
+        # 最后从备注中解析
+        import re
+        match = re.search(r'（([^）]+)）', obj.remark or '')
+        if match:
+            return match.group(1)
+        return ''
 
 
 class WarehouseSerializer(serializers.ModelSerializer):

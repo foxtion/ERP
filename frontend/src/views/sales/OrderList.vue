@@ -30,9 +30,11 @@
         <el-table-column prop="salesman_name" label="销售员" min-width="120" />
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="row.status === 'draft'" v-permission="'sales:order:edit'" link type="primary" @click="handleConfirm(row)">确认</el-button>
             <el-button v-permission="'sales:order:edit'" link type="primary" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-permission="'sales:order:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
-            <el-button v-if="['confirmed','partial'].includes(row.status)" v-permission="'sales:picking:add'" link type="success" @click="handleCreatePicking(row)">生成拣货单</el-button>
+            <el-button v-if="row.status === 'draft'" v-permission="'sales:order:delete'" link type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="row.status === 'confirmed'" v-permission="'sales:order:edit'" link type="warning" @click="handleCancel(row)">取消</el-button>
+            <el-button v-if="['confirmed','partial'].includes(row.status)" v-permission="'sales:picking:add'" link type="success" :disabled="row.has_unfinished_picking" @click="handleCreatePicking(row)">生成拣货单</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -155,7 +157,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder, createPickingFromOrder } from '@/api/sales'
+import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder, confirmOrder, cancelOrder, createPickingFromOrder } from '@/api/sales'
 import { getCustomerList } from '@/api/sales'
 import { getMaterialOptions } from '@/api/inventory'
 
@@ -313,6 +315,28 @@ const handleSubmit = async () => {
 const resetQuery = () => {
   query.value = { page: 1, size: 10, search: '', status: '' }
   fetchData()
+}
+
+const handleConfirm = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定确认订单 "${row.order_no}" 吗？确认后将不可编辑。`, '提示', { type: 'info' })
+    await confirmOrder(row.id)
+    ElMessage.success('订单确认成功')
+    await fetchData()
+  } catch (e) {
+    // 取消或报错
+  }
+}
+
+const handleCancel = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定取消订单 "${row.order_no}" 吗？`, '提示', { type: 'warning' })
+    await cancelOrder(row.id)
+    ElMessage.success('订单取消成功')
+    await fetchData()
+  } catch (e) {
+    // 取消或报错
+  }
 }
 
 const handleDelete = (row) => {

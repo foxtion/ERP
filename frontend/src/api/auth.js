@@ -33,3 +33,11 @@ export function refreshToken(data) {
     data,
   })
 }
+
+export function changePassword(data) {
+  return request({
+    url: '/system/auth/change-password/',
+    method: 'post',
+    data,
+  })
+}

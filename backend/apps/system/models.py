@@ -69,6 +69,8 @@ class Menu(BaseModel):
     sort_order = models.IntegerField(default=0, verbose_name='排序')
     is_hidden = models.BooleanField(default=False, verbose_name='是否隐藏')
     keep_alive = models.BooleanField(default=True, verbose_name='是否缓存')
+    department = models.CharField(max_length=64, blank=True, null=True, verbose_name='所属部门',
+                                  help_text='填写部门名称，如：人力资源部、销售部。为空表示通用菜单')
 
     class Meta:
         db_table = 'system_menu'

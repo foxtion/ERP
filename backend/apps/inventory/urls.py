@@ -27,4 +27,6 @@ urlpatterns = [
     path('materials/', views.MaterialListCreateView.as_view(), name='material_list'),
     path('materials/<int:pk>/', views.MaterialRetrieveUpdateDestroyView.as_view(), name='material_detail'),
     path('materials/options/', views.MaterialOptionsView.as_view(), name='material_options'),
+    path('locations/options/', views.WarehouseLocationOptionsView.as_view(), name='location_options'),
+    path('locations/products/', views.LocationProductListView.as_view(), name='location_products'),
 ]

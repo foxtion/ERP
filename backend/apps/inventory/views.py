@@ -253,6 +253,12 @@ class MaterialRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             self.required_permission = 'inventory:material:view'
         return super().get_permissions()
 
+    def destroy(self, request, *args, **kwargs):
+        # 只有管理员可删除整条物料
+        if not request.user.is_superuser:
+            return error_response(message='只有管理员可删除物料', code=403)
+        return super().destroy(request, *args, **kwargs)
+
 
 class StockWarningListView(generics.ListAPIView):
     """
@@ -283,7 +289,74 @@ class StockWarningHandleView(views.APIView):
         from django.utils import timezone
         warning.handled_at = timezone.now()
         warning.save()
+
+        # 重置关联的拣货明细为待拿状态（补货完成，可继续拣货）
+        self._reset_picking_item(warning)
+
         return success_response(message='已标记为处理')
+
+    def _reset_picking_item(self, warning):
+        import re
+        from apps.sales.models import SalesPickingList, SalesPickingListItem
+
+        # 方式1：通过 picking_item_id 直接关联
+        if warning.picking_item_id:
+            try:
+                item = SalesPickingListItem.objects.get(pk=warning.picking_item_id)
+                self._do_reset_item(item)
+                return
+            except SalesPickingListItem.DoesNotExist:
+                pass
+
+        # 方式2：通过 remark 中的拣货单号 + 物料编码匹配
+        remark = warning.remark or ''
+        # 提取拣货单号，如 "拣货单 JH20260422002"
+        m_no = re.search(r'拣货单\s+([A-Za-z0-9]+)', remark)
+        picking_no = m_no.group(1) if m_no else None
+
+        if picking_no and warning.material_code:
+            try:
+                picking = SalesPickingList.objects.get(picking_no=picking_no)
+                item = picking.items.filter(material_code=warning.material_code, status='shortage').first()
+                if item:
+                    self._do_reset_item(item)
+                    return
+            except SalesPickingList.DoesNotExist:
+                pass
+
+        # 方式3：通过 remark 中的物料名称 + 仓库匹配最近一条缺货明细
+        if picking_no and warning.material_name:
+            try:
+                picking = SalesPickingList.objects.get(picking_no=picking_no)
+                item = picking.items.filter(material_name=warning.material_name, status='shortage').first()
+                if item:
+                    self._do_reset_item(item)
+                    return
+            except SalesPickingList.DoesNotExist:
+                pass
+
+    def _do_reset_item(self, item):
+        from decimal import Decimal
+        if item.status == 'shortage':
+            item.shortage_qty = Decimal('0')
+            item.status = 'pending'
+            item.save()
+            # 同步更新拣货单状态
+            picking = item.picking_list
+            items = picking.items.all()
+            has_shortage = any((i.shortage_qty or 0) > 0 for i in items)
+            all_picked = all((i.picked_qty or 0) >= (i.quantity or 0) for i in items)
+            all_done = all(
+                (i.picked_qty or 0) >= (i.quantity or 0) or (i.shortage_qty or 0) > 0
+                for i in items
+            )
+            if all_picked:
+                picking.status = 'complete'
+            elif all_done and has_shortage:
+                picking.status = 'shortage'
+            else:
+                picking.status = 'picking'
+            picking.save()
 
 
 class StockWarningStatsView(views.APIView):
@@ -419,3 +492,48 @@ class MaterialOptionsView(views.APIView):
             'qty': str(m.qty),
         } for m in queryset[:200]]
         return success_response(data=data)
+
+
+class LocationProductListView(views.APIView):
+    """
+    从库位管理获取非空库位的物料列表（用于物料档案选择）
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search = request.query_params.get('search', '').strip()
+        queryset = WarehouseLocation.objects.filter(is_empty=False)
+        if search:
+            queryset = queryset.filter(
+                models.Q(product_code__icontains=search) |
+                models.Q(product_name__icontains=search) |
+                models.Q(barcode__icontains=search) |
+                models.Q(location_code__icontains=search)
+            )
+        data = []
+        for loc in queryset[:100]:
+            data.append({
+                'id': loc.id,
+                'product_code': loc.product_code or '',
+                'product_name': loc.product_name or '',
+                'barcode': loc.barcode or '',
+                'location_code': loc.location_code,
+                'size': loc.size,
+            })
+        return success_response(data=data)
+
+
+class WarehouseLocationOptionsView(views.APIView):
+    """
+    库位下拉选项：按大小分类返回
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.inventory.models import WarehouseLocation
+        large = WarehouseLocation.objects.filter(size='大').values_list('location_code', flat=True).distinct().order_by('location_code')
+        small = WarehouseLocation.objects.filter(size='小').values_list('location_code', flat=True).distinct().order_by('location_code')
+        return success_response(data={
+            'large': list(large),
+            'small': list(small),
+        })

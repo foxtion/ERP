@@ -201,6 +201,8 @@ class Material(models.Model):
     qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='库存数量')
     warning_threshold = models.DecimalField(max_digits=14, decimal_places=4, default=50, verbose_name='预警阈值')
     status = models.CharField(max_length=16, default='active', verbose_name='状态')
+    large_location = models.CharField(max_length=64, blank=True, null=True, verbose_name='大库位')
+    small_location = models.CharField(max_length=64, blank=True, null=True, unique=True, verbose_name='小库位')
     remark = models.TextField(blank=True, null=True, verbose_name='备注')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
@@ -233,7 +235,10 @@ class StockWarning(models.Model):
         blank=True, null=True,
         verbose_name='关联物料'
     )
+    material_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='物料编码')
     material_name = models.CharField(max_length=128, verbose_name='物料名称')
+    # 关联拣货明细（用 IntegerField 避免循环依赖）
+    picking_item_id = models.IntegerField(blank=True, null=True, verbose_name='关联拣货明细ID')
     warehouse = models.ForeignKey(
         Warehouse,
         on_delete=models.CASCADE,

@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from apps.system.models import Department as SysDepartment
 
 
 class Employee(models.Model):
@@ -106,7 +107,16 @@ class Employee(models.Model):
             user.email = self.email or user.email
             user.phone = self.phone or user.phone
             user.is_active = self.status != 'resigned'
-            user.save(update_fields=['username', 'email', 'phone', 'is_active'])
+            # 同步部门
+            if self.department:
+                dept = SysDepartment.objects.filter(name=self.department, is_active=True).first()
+                if dept and user.dept_id != dept.id:
+                    user.dept = dept
+                    user.save(update_fields=['username', 'email', 'phone', 'is_active', 'dept'])
+                else:
+                    user.save(update_fields=['username', 'email', 'phone', 'is_active'])
+            else:
+                user.save(update_fields=['username', 'email', 'phone', 'is_active'])
         else:
             # 创建新用户
             username = self._generate_username(self.name)
@@ -117,6 +127,11 @@ class Employee(models.Model):
                 is_active=self.status != 'resigned',
             )
             user.set_password(self.employee_no)
+            # 同步部门
+            if self.department:
+                dept = SysDepartment.objects.filter(name=self.department, is_active=True).first()
+                if dept:
+                    user.dept = dept
             user.save()
             self.user = user
 

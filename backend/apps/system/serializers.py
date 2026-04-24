@@ -95,7 +95,7 @@ class MenuSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_children(self, obj):
-        children = obj.children.filter(is_active=True)
+        children = obj.children.filter(is_active=True, is_hidden=False)
         if children.exists():
             return MenuSerializer(children, many=True, context=self.context).data
         return []

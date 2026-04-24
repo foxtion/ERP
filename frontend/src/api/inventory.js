@@ -88,10 +88,21 @@ export function createMaterial(data) {
 export function updateMaterial(id, data) {
   return request({ url: `/inventory/materials/${id}/`, method: 'put', data })
 }
+export function patchMaterial(id, data) {
+  return request({ url: `/inventory/materials/${id}/`, method: 'patch', data })
+}
 export function deleteMaterial(id) {
   return request({ url: `/inventory/materials/${id}/`, method: 'delete' })
 }
 
 export function getMaterialOptions(params) {
   return request({ url: '/inventory/materials/options/', method: 'get', params })
+}
+
+export function getLocationOptions() {
+  return request({ url: '/inventory/locations/options/', method: 'get' })
+}
+
+export function getLocationProducts(params) {
+  return request({ url: '/inventory/locations/products/', method: 'get', params })
 }

@@ -84,8 +84,9 @@ const handleLogin = async () => {
       username: loginForm.username,
       password: loginForm.password,
     })
-    if (res.data.menus && res.data.menus.length > 0) {
-      const accessRoutes = permissionStore.generateRoutes(res.data.menus)
+    const menus = res.data?.menus || []
+    if (menus.length > 0) {
+      const accessRoutes = permissionStore.generateRoutes(menus)
       accessRoutes.forEach((r) => {
         if (!router.hasRoute(r.name)) {
           router.addRoute(r)
@@ -94,9 +95,10 @@ const handleLogin = async () => {
     }
     ElMessage.success('登录成功')
     const redirect = route.query.redirect || '/'
-    router.push(redirect)
+    await router.push(redirect)
   } catch (error) {
-    console.error(error)
+    console.error('登录失败:', error)
+    ElMessage.error(error?.response?.data?.message || error?.message || '登录失败')
   } finally {
     loading.value = false
   }

@@ -20,16 +20,44 @@ def get_user_menus(user):
     if user.is_superuser:
         queryset = Menu.objects.filter(is_active=True).exclude(menu_type='BUTTON')
     else:
+        # 获取用户所在部门
+        user_dept_name = None
+        if hasattr(user, 'employee_profile') and user.employee_profile:
+            user_dept_name = user.employee_profile.department
+        elif user.dept_id:
+            user_dept_name = user.dept.name
+
         menu_ids = set()
-        for role in user.roles.all():
-            for menu in role.menus.filter(is_active=True).exclude(menu_type='BUTTON'):
+        user_roles = list(user.roles.all())
+
+        if user_roles:
+            # 有角色：按角色收集菜单，再按部门过滤
+            for role in user_roles:
+                for menu in role.menus.filter(is_active=True).exclude(menu_type='BUTTON'):
+                    menu_ids.add(menu.id)
+                    parent = menu.parent
+                    while parent:
+                        menu_ids.add(parent.id)
+                        parent = parent.parent
+
+            # 按部门过滤：保留用户所在部门的菜单 + 通用菜单（department 为空）
+            if user_dept_name and menu_ids:
+                filtered_ids = set()
+                for menu in Menu.objects.filter(id__in=menu_ids):
+                    if not menu.department or menu.department == user_dept_name:
+                        filtered_ids.add(menu.id)
+                menu_ids = filtered_ids
+        elif user_dept_name:
+            # 无角色但有部门：直接展示该部门的所有菜单
+            for menu in Menu.objects.filter(is_active=True, department=user_dept_name).exclude(menu_type='BUTTON'):
                 menu_ids.add(menu.id)
                 parent = menu.parent
                 while parent:
                     menu_ids.add(parent.id)
                     parent = parent.parent
-        queryset = Menu.objects.filter(id__in=menu_ids).exclude(menu_type='BUTTON')
-    top_menus = queryset.filter(parent__isnull=True).order_by('sort_order', 'id')
+
+        queryset = Menu.objects.filter(id__in=menu_ids, is_hidden=False).exclude(menu_type='BUTTON')
+    top_menus = queryset.filter(parent__isnull=True, is_hidden=False).order_by('sort_order', 'id')
     return MenuSerializer(top_menus, many=True).data
 
 
@@ -83,6 +111,30 @@ class LogoutView(views.APIView):
 
     def post(self, request):
         return success_response(message='登出成功')
+
+
+class ChangePasswordView(views.APIView):
+    """
+    修改当前登录用户密码
+    POST /system/auth/change-password/
+    {"old_password": "xxx", "new_password": "yyy"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+
+        if not old_password or not new_password:
+            return error_response(message='旧密码和新密码不能为空', code=400)
+
+        user = request.user
+        if not user.check_password(old_password):
+            return error_response(message='旧密码错误', code=400)
+
+        user.set_password(new_password)
+        user.save()
+        return success_response(message='密码修改成功，请重新登录')
 
 
 class UserInfoView(views.APIView):

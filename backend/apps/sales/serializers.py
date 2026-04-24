@@ -87,6 +87,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
     items = SalesOrderItemSerializer(many=True, required=False)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     salesman_name = serializers.CharField(source='salesman.username', read_only=True)
+    has_unfinished_picking = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = SalesOrder
@@ -94,6 +95,9 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'order_no': {'required': False},
         }
+
+    def get_has_unfinished_picking(self, obj):
+        return obj.picking_lists.exclude(status__in=['done', 'cancelled']).exists()
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])

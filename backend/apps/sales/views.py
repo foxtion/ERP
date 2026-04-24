@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import generics, views, status
 from rest_framework.permissions import IsAuthenticated
 from django.http import HttpResponse
@@ -527,13 +529,23 @@ class SalesPickingListListCreateView(CreateResponseMixin, generics.ListCreateAPI
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'sales:picking:view'
     search_fields = ['picking_no', 'order__order_no']
-    filterset_fields = ['status', 'warehouse']
+    filterset_fields = ['status', 'warehouse', 'assigned_to', 'picker']
     pagination_class = StandardPagination
 
     def get_permissions(self):
         if self.request.method == 'POST':
             self.required_permission = 'sales:picking:add'
         return super().get_permissions()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        # 非管理员只能看到：指派给自己的 + 未指派的（可以指派给别人）
+        if not user.is_superuser:
+            queryset = queryset.filter(
+                Q(assigned_to=user) | Q(assigned_to__isnull=True)
+            )
+        return queryset
 
 
 class SalesPickingListRetrieveUpdateDestroyView(RUDResponseMixin, generics.RetrieveUpdateDestroyAPIView):
@@ -547,8 +559,8 @@ class SalesPickingListRetrieveUpdateDestroyView(RUDResponseMixin, generics.Retri
             self.required_permission = 'sales:picking:edit'
         elif method == 'DELETE':
             self.required_permission = 'sales:picking:delete'
-        else:
-            self.required_permission = 'sales:picking:view'
+        # GET / Retrieve 不再强制要求 sales:picking:view 权限，
+        # 出货员/拣货员只要能登录就能查看被指派的拣货单详情
         return super().get_permissions()
 
 
@@ -693,27 +705,90 @@ class SalesPickingListPickItemView(views.APIView):
         except SalesPickingList.DoesNotExist:
             return error_response(message='拣货单不存在', code=404)
 
-        if picking.status not in ('picking', 'accepted'):
+        # 只有已完成的拣货单才禁止继续操作
+        if picking.status in ('done', 'cancelled'):
             return error_response(message='该拣货单当前不可操作', code=400)
 
         item_id = request.data.get('item_id')
-        picked_qty = Decimal(str(request.data.get('picked_qty', 0)))
-        shortage_qty = Decimal(str(request.data.get('shortage_qty', 0)))
+        if not item_id:
+            return error_response(message='缺少 item_id 参数', code=400)
+
+        picked_qty_raw = request.data.get('picked_qty')
+        shortage_qty_raw = request.data.get('shortage_qty')
+        try:
+            def _to_decimal(v):
+                if v is None or v == '':
+                    return Decimal('0')
+                if isinstance(v, bool):
+                    return Decimal('1') if v else Decimal('0')
+                return Decimal(str(v))
+            picked_qty = _to_decimal(picked_qty_raw)
+            shortage_qty = _to_decimal(shortage_qty_raw)
+        except Exception as e:
+            return error_response(
+                message=f'数量格式不正确: picked_qty={picked_qty_raw!r}({type(picked_qty_raw).__name__}), shortage_qty={shortage_qty_raw!r}({type(shortage_qty_raw).__name__}), 错误: {e}',
+                code=400
+            )
 
         try:
             item = SalesPickingListItem.objects.get(pk=item_id, picking_list=picking)
-        except SalesPickingListItem.DoesNotExist:
+        except (SalesPickingListItem.DoesNotExist, ValueError):
             return error_response(message='拣货明细不存在', code=404)
 
-        item.picked_qty = picked_qty
-        item.shortage_qty = shortage_qty
-        if shortage_qty > 0:
+        if picked_qty < 0 or shortage_qty < 0:
+            return error_response(message='数量不能为负数', code=400)
+
+        item_qty = item.quantity or Decimal('0')
+        if picked_qty + shortage_qty > item_qty:
+            return error_response(
+                message=f'实际拿到({picked_qty}) + 缺货({shortage_qty}) 超过需拿数量({item_qty})',
+                code=400
+            )
+
+        # 如果之前是缺货状态，本次点击"已拿"时先清零缺货数量（补货后继续拣货）
+        if item.status == 'shortage' and picked_qty > 0:
+            item.shortage_qty = Decimal('0')
+
+        # 累加模式：本次录入的数量叠加到已有数量上
+        new_picked = (item.picked_qty or Decimal('0')) + picked_qty
+        new_shortage = (item.shortage_qty or Decimal('0')) + shortage_qty
+
+        if new_picked + new_shortage > item_qty:
+            return error_response(
+                message=f'累计已拿({new_picked}) + 累计缺货({new_shortage}) 超过需拿数量({item_qty})',
+                code=400
+            )
+
+        # 判断是否是本次新产生的缺货（之前 shortage 为 0，现在 > 0）
+        is_new_shortage = (item.shortage_qty or Decimal('0')) == 0 and new_shortage > 0
+
+        item.picked_qty = new_picked
+        item.shortage_qty = new_shortage
+        if new_shortage > 0:
             item.status = 'shortage'
-        elif picked_qty >= item.quantity:
+        elif new_picked >= item_qty:
             item.status = 'picked'
         else:
             item.status = 'pending'
         item.save()
+
+        # 本次新产生缺货时，自动创建库存预警
+        if is_new_shortage:
+            from apps.inventory.models import StockWarning, Warehouse, Material
+            warehouse = Warehouse.objects.filter(name=picking.warehouse).first()
+            material = Material.objects.filter(code=item.material_code).first()
+            StockWarning.objects.create(
+                material=material,
+                material_code=item.material_code or '',
+                material_name=item.material_name,
+                picking_item_id=item.id,
+                warehouse=warehouse,
+                current_qty=0,
+                threshold=0,
+                status='urgent',
+                warning_type='picking_shortage',
+                remark=f'拣货单 {picking.picking_no} 缺货：{item.material_name} ({item.material_code or ""})，库位 {item.location_code or ""}',
+            )
 
         # 更新拣货单状态
         self._update_picking_status(picking)
@@ -723,12 +798,18 @@ class SalesPickingListPickItemView(views.APIView):
         items = picking.items.all()
         has_shortage = any((i.shortage_qty or 0) > 0 for i in items)
         all_picked = all((i.picked_qty or 0) >= (i.quantity or 0) for i in items)
+        # 是否所有商品都已处理完毕（已拿完 或 已标记缺货）
+        all_done = all(
+            (i.picked_qty or 0) >= (i.quantity or 0) or (i.shortage_qty or 0) > 0
+            for i in items
+        )
 
         if all_picked:
             picking.status = 'complete'
-        elif has_shortage:
+        elif all_done and has_shortage:
             picking.status = 'shortage'
         else:
+            # 还有商品未处理完，保持 picking 状态以便继续作业
             picking.status = 'picking'
         picking.save()
 
@@ -742,7 +823,7 @@ class SalesPickingListReportShortageView(views.APIView):
     required_permission = 'sales:picking:job'
 
     def post(self, request, pk):
-        from apps.inventory.models import StockWarning, Warehouse
+        from apps.inventory.models import StockWarning, Warehouse, Material
         try:
             picking = SalesPickingList.objects.get(pk=pk)
         except SalesPickingList.DoesNotExist:
@@ -757,15 +838,19 @@ class SalesPickingListReportShortageView(views.APIView):
             return error_response(message='拣货明细不存在', code=404)
 
         warehouse = Warehouse.objects.filter(name=picking.warehouse).first()
+        material = Material.objects.filter(code=item.material_code).first()
 
         StockWarning.objects.create(
+            material=material,
+            material_code=item.material_code or '',
             material_name=item.material_name,
+            picking_item_id=item.id,
             warehouse=warehouse,
             current_qty=0,
             threshold=0,
             status='urgent',
             warning_type='picking_shortage',
-            remark=f'拣货单 {picking.picking_no} 缺货：{item.material_name} ({item.spec or ""})，库位 {item.location_code or ""}。{remark}',
+            remark=f'拣货单 {picking.picking_no} 缺货：{item.material_name} ({item.material_code or ""})，库位 {item.location_code or ""}。{remark}',
         )
 
         # 同时标记该明细为缺货
