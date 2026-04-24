@@ -215,8 +215,8 @@ const rules = {
 }
 
 const statusText = (s) => ({ draft: '草稿', released: '已下达', processing: '生产中', completed: '已完成', cancelled: '已取消' }[s] || s)
-const statusType = (s) => ({ draft: 'info', released: 'primary', processing: 'warning', completed: 'success', cancelled: 'danger' }[s] || '')
-const priorityType = (p) => ({ urgent: 'danger', high: 'warning', normal: '', low: 'info' }[p] || '')
+const statusType = (s) => ({ draft: 'info', released: 'primary', processing: 'warning', completed: 'success', cancelled: 'danger' }[s])
+const priorityType = (p) => ({ urgent: 'danger', high: 'warning', normal: undefined, low: 'info' }[p])
 
 const fetchData = async () => {
   const params = { ...query.value }

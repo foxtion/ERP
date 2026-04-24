@@ -78,9 +78,10 @@ request.interceptors.request.use(
 // ==================== 响应拦截器：统一错误处理、Token 无感刷新 ====================
 request.interceptors.response.use(
   (response) => {
-    // blob / arraybuffer 响应直接返回原始 response.data，不做 JSON 格式校验
+    // blob / arraybuffer 响应直接返回原始 response，不做 JSON 格式校验
+    // 调用方通过 res.data 获取二进制内容
     if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
-      return response.data
+      return response
     }
     const res = response.data
     // 后端统一格式：{ code, message, data }

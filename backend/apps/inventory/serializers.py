@@ -21,7 +21,8 @@ class MaterialSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             return None
-        if not WarehouseLocation.objects.filter(location_code=value, size=size_code).exists():
+        loc = WarehouseLocation.objects.filter(location_code=value, size=size_code).first()
+        if not loc:
             raise serializers.ValidationError(f'{size_label} {value} 不存在于库位管理中')
         return value
 
@@ -99,13 +100,18 @@ class InventorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_warning_status_display(self, obj):
-        threshold = obj.material.warning_threshold if hasattr(obj, 'material') and obj.material else 50
+        # Inventory 无 material 外键，通过名称查询 Material 表获取真实阈值
+        from apps.inventory.models import Material
+        material = Material.objects.filter(name=obj.material_name).first()
+        threshold = material.warning_threshold if material else (obj.warning_threshold or 50)
         return '预警' if obj.qty <= threshold else '正常'
 
     def get_material_code(self, obj):
-        if hasattr(obj, 'material') and obj.material:
-            return obj.material.code
-        return ''
+        if getattr(obj, 'material_code', None):
+            return obj.material_code
+        from apps.inventory.models import Material
+        material = Material.objects.filter(name=obj.material_name).first()
+        return material.code if material else ''
 
 
 class StockTransferItemSerializer(serializers.ModelSerializer):

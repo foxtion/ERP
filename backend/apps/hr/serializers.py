@@ -19,7 +19,17 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        fields = '__all__'
+        fields = [
+            'id', 'employee_no', 'name', 'gender', 'phone', 'email',
+            'birth_date', 'department', 'position', 'department_name', 'position_name',
+            'education', 'graduate_school', 'entry_date', 'probation_end_date',
+            'contract_end_date', 'resignation_date', 'status',
+            'dingtalk_user_id', 'address', 'remark',
+            'user_id', 'username', 'age', 'created_at', 'updated_at'
+        ]
+        extra_kwargs = {
+            'user': {'read_only': True},
+        }
 
 
 class EmployeeOptionSerializer(serializers.ModelSerializer):

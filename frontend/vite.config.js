@@ -15,7 +15,7 @@ export default defineConfig({
     proxy: {
       // 开发环境代理：将 /api 请求转发到 Django 后端
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
       },
     },

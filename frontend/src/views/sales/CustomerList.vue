@@ -459,7 +459,7 @@ const handleExport = async () => {
     if (params.is_active === '' || params.is_active === null) delete params.is_active
 
     const res = await exportCustomers(params)
-    const blob = new Blob([res], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.download = `客户列表_${new Date().toISOString().slice(0, 10)}.xlsx`

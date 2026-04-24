@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from apps.system.models import Department as SysDepartment
+from datetime import datetime, time, timedelta
 
 
 class Position(models.Model):
@@ -146,11 +148,10 @@ class Employee(models.Model):
             user.email = self.email or user.email
             user.phone = self.phone or user.phone
             user.is_active = self.status != 'resigned'
-            # 同步部门
+            # 同步部门（department 现在是外键对象）
             if self.department:
-                dept = SysDepartment.objects.filter(name=self.department, is_active=True).first()
-                if dept and user.dept_id != dept.id:
-                    user.dept = dept
+                if user.dept_id != self.department.id:
+                    user.dept = self.department
                     user.save(update_fields=['username', 'email', 'phone', 'is_active', 'dept'])
                 else:
                     user.save(update_fields=['username', 'email', 'phone', 'is_active'])
@@ -168,9 +169,7 @@ class Employee(models.Model):
             user.set_password(self.employee_no)
             # 同步部门
             if self.department:
-                dept = SysDepartment.objects.filter(name=self.department, is_active=True).first()
-                if dept:
-                    user.dept = dept
+                user.dept = self.department
             user.save()
             self.user = user
 

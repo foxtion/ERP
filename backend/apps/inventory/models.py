@@ -67,6 +67,7 @@ class Inventory(models.Model):
             StockWarning.objects.update_or_create(
                 warehouse=self.warehouse,
                 material_name=self.material_name,
+                spec=self.spec or '',
                 defaults={
                     'material': mat,
                     'current_qty': self.qty,
@@ -78,7 +79,8 @@ class Inventory(models.Model):
         else:
             StockWarning.objects.filter(
                 warehouse=self.warehouse,
-                material_name=self.material_name
+                material_name=self.material_name,
+                spec=self.spec or ''
             ).delete()
 
     def __str__(self):
@@ -89,10 +91,16 @@ class StockTransfer(models.Model):
     """
     库存调拨单
     """
+    STATUS_CHOICES = (
+        ('pending', '待执行'),
+        ('completed', '已完成'),
+        ('cancelled', '已取消'),
+    )
     transfer_no = models.CharField(max_length=64, unique=True, verbose_name='调拨单号')
     from_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='out_transfers', verbose_name='调出仓库')
     to_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='in_transfers', verbose_name='调入仓库')
     transfer_date = models.DateField(verbose_name='调拨日期')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', verbose_name='状态')
     operator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -192,6 +200,14 @@ class Material(models.Model):
     """
     物料档案（基础数据）
     """
+    def save(self, *args, **kwargs):
+        # 统一空字符串为 None，避免 unique 约束冲突
+        if self.large_location == '':
+            self.large_location = None
+        if self.small_location == '':
+            self.small_location = None
+        super().save(*args, **kwargs)
+
     code = models.CharField(max_length=64, unique=True, verbose_name='物料编码')
     name = models.CharField(max_length=128, verbose_name='物料名称')
     spec = models.CharField(max_length=128, blank=True, null=True, verbose_name='规格型号')
@@ -237,6 +253,7 @@ class StockWarning(models.Model):
     )
     material_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='物料编码')
     material_name = models.CharField(max_length=128, verbose_name='物料名称')
+    spec = models.CharField(max_length=128, blank=True, null=True, verbose_name='规格型号')
     # 关联拣货明细（用 IntegerField 避免循环依赖）
     picking_item_id = models.IntegerField(blank=True, null=True, verbose_name='关联拣货明细ID')
     warehouse = models.ForeignKey(
@@ -283,7 +300,12 @@ class WarehouseLocation(models.Model):
     )
     location_code = models.CharField(max_length=64, verbose_name='库位编码')
     barcode = models.CharField(max_length=64, blank=True, null=True, verbose_name='条码')
-    size = models.CharField(max_length=32, default='小', verbose_name='库位大小')
+    SIZE_CHOICES = (
+        ('小', '小'),
+        ('中', '中'),
+        ('大', '大'),
+    )
+    size = models.CharField(max_length=32, choices=SIZE_CHOICES, default='小', verbose_name='库位大小')
     product_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='货物编码')
     product_name = models.CharField(max_length=128, blank=True, null=True, verbose_name='货物名称')
     is_empty = models.BooleanField(default=True, verbose_name='是否空位')

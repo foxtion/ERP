@@ -277,7 +277,7 @@ class StockWarningHandleView(views.APIView):
     标记预警为已处理
     """
     permission_classes = [IsAuthenticated, RBACPermission]
-    required_permission = 'inventory:stock:view'
+    required_permission = 'inventory:stock:edit'
 
     def post(self, request, pk):
         try:
@@ -389,9 +389,14 @@ class StockTransferExecuteView(views.APIView):
     def post(self, request, pk):
         from decimal import Decimal
         try:
-            transfer = StockTransfer.objects.prefetch_related('items').get(pk=pk)
+            transfer = StockTransfer.objects.select_for_update().prefetch_related('items').get(pk=pk)
         except StockTransfer.DoesNotExist:
             return error_response(message='调拨单不存在', code=404)
+
+        if transfer.status == 'completed':
+            return error_response(message='调拨单已执行，不可重复操作', code=400)
+        if transfer.status == 'cancelled':
+            return error_response(message='调拨单已取消', code=400)
 
         from_warehouse = transfer.from_warehouse
         to_warehouse = transfer.to_warehouse
@@ -425,6 +430,8 @@ class StockTransferExecuteView(views.APIView):
             to_inv.qty += qty
             to_inv.save()
 
+        transfer.status = 'completed'
+        transfer.save()
         return success_response(message='调拨执行成功')
 
 
@@ -498,7 +505,8 @@ class LocationProductListView(views.APIView):
     """
     从库位管理获取非空库位的物料列表（用于物料档案选择）
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'inventory:location:view'
 
     def get(self, request):
         search = request.query_params.get('search', '').strip()
@@ -527,13 +535,16 @@ class WarehouseLocationOptionsView(views.APIView):
     """
     库位下拉选项：按大小分类返回
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'inventory:location:view'
 
     def get(self, request):
         from apps.inventory.models import WarehouseLocation
         large = WarehouseLocation.objects.filter(size='大').values_list('location_code', flat=True).distinct().order_by('location_code')
+        middle = WarehouseLocation.objects.filter(size='中').values_list('location_code', flat=True).distinct().order_by('location_code')
         small = WarehouseLocation.objects.filter(size='小').values_list('location_code', flat=True).distinct().order_by('location_code')
         return success_response(data={
             'large': list(large),
+            'middle': list(middle),
             'small': list(small),
         })

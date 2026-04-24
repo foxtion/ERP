@@ -170,17 +170,17 @@
           <el-col :span="12">
             <el-form-item label="性别">
               <el-radio-group v-model="form.gender">
-                <el-radio label="male">男</el-radio>
-                <el-radio label="female">女</el-radio>
+                <el-radio value="male">男</el-radio>
+                <el-radio value="female">女</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="状态">
               <el-radio-group v-model="form.status">
-                <el-radio label="active">在职</el-radio>
-                <el-radio label="probation">试用期</el-radio>
-                <el-radio label="resigned">离职</el-radio>
+                <el-radio value="active">在职</el-radio>
+                <el-radio value="probation">试用期</el-radio>
+                <el-radio value="resigned">离职</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -465,13 +465,22 @@ const fetchDeptTree = async () => {
   deptOptions.value = flat
 }
 
-const onDeptChange = async (deptId) => {
-  form.value.position = null
+const onDeptChange = async (deptId, keepPosition = false) => {
+  if (!keepPosition) {
+    form.value.position = null
+  }
   positionOptions.value = []
   if (!deptId) return
   try {
     const res = await getPositionsByDepartment(deptId)
     positionOptions.value = (res.data || []).map(p => ({ label: p.name, value: p.id }))
+    // 如果保留职位但新加载的选项中没有该职位，则清空
+    if (keepPosition && form.value.position) {
+      const exists = positionOptions.value.some(o => o.value === form.value.position)
+      if (!exists) {
+        form.value.position = null
+      }
+    }
   } catch (e) {
     positionOptions.value = []
   }
@@ -522,10 +531,19 @@ const handleEdit = async (row) => {
   dialogTitle.value = '编辑员工'
   isEdit.value = true
   currentId.value = row.id
-  Object.assign(form.value, row)
-  // 如果员工有部门，加载对应职位列表
+  // 只复制表单需要的字段，避免污染
+  const fields = [
+    'employee_no', 'name', 'gender', 'phone', 'email', 'id_card', 'birth_date',
+    'department', 'position', 'education', 'graduate_school', 'entry_date',
+    'probation_end_date', 'contract_end_date', 'resignation_date',
+    'dingtalk_user_id', 'status', 'address', 'remark'
+  ]
+  fields.forEach(k => {
+    form.value[k] = row[k] !== undefined ? row[k] : ''
+  })
+  // 如果员工有部门，加载对应职位列表（保留原职位）
   if (row.department) {
-    await onDeptChange(row.department)
+    await onDeptChange(row.department, true)
   }
   dialogVisible.value = true
 }

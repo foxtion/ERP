@@ -157,8 +157,8 @@ class EmployeeStatsView(views.APIView):
         ).count()
         # 按部门统计
         dept_stats = []
-        for d in Employee.objects.exclude(department='').exclude(department__isnull=True).values('department').annotate(count=Count('id')).order_by('-count'):
-            dept_stats.append({'department': d['department'], 'count': d['count']})
+        for d in Employee.objects.exclude(department__isnull=True).values('department', 'department__name').annotate(count=Count('id')).order_by('-count'):
+            dept_stats.append({'department': d['department__name'], 'count': d['count']})
         return success_response(data={
             'total': total,
             'active': active,
