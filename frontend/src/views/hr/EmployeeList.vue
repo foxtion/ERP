@@ -44,7 +44,7 @@
           <el-tree-select
             v-model="searchForm.department"
             :data="deptTreeData"
-            :props="{ label: 'name', value: 'name', children: 'children' }"
+            :props="{ label: 'name', value: 'id', children: 'children' }"
             check-strictly
             clearable
             placeholder="请选择部门"
@@ -101,8 +101,8 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="department" label="部门" min-width="120" />
-        <el-table-column prop="position" label="职位" min-width="120" />
+        <el-table-column prop="department_name" label="部门" min-width="120" />
+        <el-table-column prop="position_name" label="职位" min-width="120" />
         <el-table-column prop="phone" label="手机号" min-width="120" />
         <el-table-column prop="entry_date" label="入职日期" width="110" />
         <el-table-column prop="contract_end_date" label="合同到期" width="110">
@@ -212,20 +212,26 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="部门">
-              <el-tree-select
+              <el-select-v2
                 v-model="form.department"
-                :data="deptTreeData"
-                :props="{ label: 'name', value: 'name', children: 'children' }"
-                check-strictly
-                clearable
+                :options="deptOptions"
                 placeholder="请选择部门"
+                clearable
                 style="width: 100%"
+                @change="onDeptChange"
               />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="职位">
-              <el-input v-model="form.position" placeholder="请输入职位" />
+              <el-select-v2
+                v-model="form.position"
+                :options="positionOptions"
+                placeholder="请先选择部门"
+                clearable
+                :disabled="!form.department"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -320,8 +326,8 @@
         <el-descriptions-item label="邮箱">{{ currentRow.email || '-' }}</el-descriptions-item>
         <el-descriptions-item label="身份证号">{{ currentRow.id_card || '-' }}</el-descriptions-item>
         <el-descriptions-item label="出生日期">{{ currentRow.birth_date || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="部门">{{ currentRow.department || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="职位">{{ currentRow.position || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="部门">{{ currentRow.department_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="职位">{{ currentRow.position_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="学历">{{ educationText(currentRow.education) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="毕业院校">{{ currentRow.graduate_school || '-' }}</el-descriptions-item>
         <el-descriptions-item label="入职日期">{{ currentRow.entry_date || '-' }}</el-descriptions-item>
@@ -351,7 +357,8 @@ import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getEmployeeList, createEmployee, updateEmployee, deleteEmployee,
-  generateEmployeeNo, confirmEmployee, resignEmployee, getEmployeeStats
+  generateEmployeeNo, confirmEmployee, resignEmployee, getEmployeeStats,
+  getPositionsByDepartment
 } from '@/api/hr'
 import { getDeptTree } from '@/api/system'
 
@@ -361,10 +368,12 @@ const loading = ref(false)
 const query = ref({ page: 1, size: 10 })
 const stats = ref({})
 const deptTreeData = ref([])
+const deptOptions = ref([])
+const positionOptions = ref([])
 
 const searchForm = reactive({
   search: '',
-  department: '',
+  department: null,
   status: '',
   gender: '',
   dateRange: [],
@@ -444,6 +453,28 @@ onMounted(() => {
 const fetchDeptTree = async () => {
   const res = await getDeptTree()
   deptTreeData.value = res.data
+  // 扁平化为 el-select-v2 选项
+  const flat = []
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      flat.push({ label: n.name, value: n.id })
+      walk(n.children)
+    }
+  }
+  walk(res.data)
+  deptOptions.value = flat
+}
+
+const onDeptChange = async (deptId) => {
+  form.value.position = null
+  positionOptions.value = []
+  if (!deptId) return
+  try {
+    const res = await getPositionsByDepartment(deptId)
+    positionOptions.value = (res.data || []).map(p => ({ label: p.name, value: p.id }))
+  } catch (e) {
+    positionOptions.value = []
+  }
 }
 
 const handleSearch = () => {
@@ -453,7 +484,7 @@ const handleSearch = () => {
 
 const handleReset = () => {
   searchForm.search = ''
-  searchForm.department = ''
+  searchForm.department = null
   searchForm.status = ''
   searchForm.gender = ''
   searchForm.dateRange = []
@@ -470,11 +501,12 @@ const generateNo = async () => {
 const resetForm = () => {
   form.value = {
     employee_no: '', name: '', gender: 'male', phone: '', email: '', id_card: '', birth_date: '',
-    department: '', position: '', education: '', graduate_school: '', entry_date: '',
+    department: null, position: null, education: '', graduate_school: '', entry_date: '',
     probation_end_date: '', contract_end_date: '', resignation_date: '',
     bank_name: '', bank_account: '', emergency_contact: '', emergency_phone: '',
     status: 'active', address: '', remark: ''
   }
+  positionOptions.value = []
   currentId.value = null
   isEdit.value = false
 }
@@ -485,12 +517,16 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row) => {
+const handleEdit = async (row) => {
   resetForm()
   dialogTitle.value = '编辑员工'
   isEdit.value = true
   currentId.value = row.id
   Object.assign(form.value, row)
+  // 如果员工有部门，加载对应职位列表
+  if (row.department) {
+    await onDeptChange(row.department)
+  }
   dialogVisible.value = true
 }
 

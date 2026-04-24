@@ -1,7 +1,32 @@
 from django.db import models
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from apps.system.models import Department as SysDepartment
+
+
+class Position(models.Model):
+    """
+    职位表：隶属于部门
+    """
+    name = models.CharField(max_length=64, verbose_name='职位名称')
+    department = models.ForeignKey(
+        'system.Department',
+        on_delete=models.CASCADE,
+        related_name='positions',
+        verbose_name='所属部门'
+    )
+    sort_order = models.IntegerField(default=0, verbose_name='排序')
+    is_active = models.BooleanField(default=True, verbose_name='是否启用')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'hr_position'
+        verbose_name = '职位'
+        verbose_name_plural = verbose_name
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return f'{self.department.name} - {self.name}'
 
 
 class Employee(models.Model):
@@ -32,8 +57,22 @@ class Employee(models.Model):
     email = models.EmailField(blank=True, null=True, verbose_name='邮箱')
     id_card = models.CharField(max_length=18, blank=True, null=True, verbose_name='身份证号')
     birth_date = models.DateField(blank=True, null=True, verbose_name='出生日期')
-    department = models.CharField(max_length=64, blank=True, null=True, verbose_name='部门')
-    position = models.CharField(max_length=64, blank=True, null=True, verbose_name='职位')
+    department_old = models.CharField(max_length=64, blank=True, null=True, verbose_name='部门(旧)')
+    position_old = models.CharField(max_length=64, blank=True, null=True, verbose_name='职位(旧)')
+    department = models.ForeignKey(
+        'system.Department',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='employees',
+        verbose_name='部门'
+    )
+    position = models.ForeignKey(
+        'hr.Position',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='employees',
+        verbose_name='职位'
+    )
     education = models.CharField(max_length=16, choices=EDUCATION_CHOICES, blank=True, null=True, verbose_name='学历')
     graduate_school = models.CharField(max_length=128, blank=True, null=True, verbose_name='毕业院校')
     entry_date = models.DateField(blank=True, null=True, verbose_name='入职日期')

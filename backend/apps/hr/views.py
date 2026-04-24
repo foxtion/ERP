@@ -6,11 +6,11 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import date
 
-from apps.hr.models import Employee, Attendance, Salary, Recruitment, DingTalkConfig
+from apps.hr.models import Employee, Attendance, Salary, Recruitment, DingTalkConfig, Position
 from apps.hr.serializers import (
     EmployeeSerializer, EmployeeOptionSerializer,
     AttendanceSerializer, SalarySerializer, RecruitmentSerializer,
-    DingTalkConfigSerializer
+    DingTalkConfigSerializer, PositionSerializer
 )
 
 
@@ -19,8 +19,8 @@ class EmployeeListCreateView(generics.ListCreateAPIView):
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'hr:employee:view'
-    search_fields = ['employee_no', 'name', 'phone', 'department', 'position']
-    filterset_fields = ['status', 'gender', 'department']
+    search_fields = ['employee_no', 'name', 'phone']
+    filterset_fields = ['status', 'gender', 'department', 'position']
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -426,6 +426,51 @@ class DingTalkConfigView(views.APIView):
             }
         )
         return success_response(message='配置保存成功')
+
+
+class PositionListCreateView(generics.ListCreateAPIView):
+    queryset = Position.objects.filter(is_active=True).order_by('sort_order', 'id')
+    serializer_class = PositionSerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'hr:position:view'
+    search_fields = ['name']
+    filterset_fields = ['department']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            self.required_permission = 'hr:position:add'
+        return super().get_permissions()
+
+
+class PositionRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Position.objects.all()
+    serializer_class = PositionSerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+
+    def get_permissions(self):
+        method = self.request.method
+        if method in ('PUT', 'PATCH'):
+            self.required_permission = 'hr:position:edit'
+        elif method == 'DELETE':
+            self.required_permission = 'hr:position:delete'
+        else:
+            self.required_permission = 'hr:position:view'
+        return super().get_permissions()
+
+
+class PositionByDepartmentView(views.APIView):
+    """
+    根据部门ID获取职位列表（用于前端联动）
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        dept_id = request.query_params.get('department_id')
+        if not dept_id:
+            return success_response(data=[])
+        positions = Position.objects.filter(department_id=dept_id, is_active=True).order_by('sort_order', 'id')
+        data = [{'id': p.id, 'name': p.name} for p in positions]
+        return success_response(data=data)
 
 
 class DingTalkTestConnectionView(views.APIView):

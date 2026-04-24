@@ -1,11 +1,21 @@
 from rest_framework import serializers
-from apps.hr.models import Employee, Attendance, Salary, Recruitment, DingTalkConfig
+from apps.hr.models import Employee, Attendance, Salary, Recruitment, DingTalkConfig, Position
+
+
+class PositionSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+
+    class Meta:
+        model = Position
+        fields = '__all__'
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
     age = serializers.IntegerField(read_only=True, allow_null=True)
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    position_name = serializers.CharField(source='position.name', read_only=True)
 
     class Meta:
         model = Employee
@@ -21,7 +31,7 @@ class EmployeeOptionSerializer(serializers.ModelSerializer):
 class AttendanceSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.name', read_only=True)
     employee_no = serializers.CharField(source='employee.employee_no', read_only=True)
-    department = serializers.CharField(source='employee.department', read_only=True)
+    department = serializers.CharField(source='employee.department.name', read_only=True)
 
     class Meta:
         model = Attendance

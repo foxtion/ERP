@@ -21,6 +21,10 @@ urlpatterns = [
     path('recruitments/', views.RecruitmentListCreateView.as_view(), name='recruitment_list'),
     path('recruitments/<int:pk>/', views.RecruitmentRetrieveUpdateDestroyView.as_view(), name='recruitment_detail'),
 
+    path('positions/', views.PositionListCreateView.as_view(), name='position_list'),
+    path('positions/<int:pk>/', views.PositionRetrieveUpdateDestroyView.as_view(), name='position_detail'),
+    path('positions/by-department/', views.PositionByDepartmentView.as_view(), name='position_by_department'),
+
     path('dingtalk/config/', views.DingTalkConfigView.as_view(), name='dingtalk_config'),
     path('dingtalk/test/', views.DingTalkTestConnectionView.as_view(), name='dingtalk_test'),
     path('dingtalk/sync/', views.DingTalkSyncView.as_view(), name='dingtalk_sync'),

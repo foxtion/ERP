@@ -29,6 +29,23 @@ export function getEmployeeStats() {
   return request({ url: '/hr/employees/stats/', method: 'get' })
 }
 
+// ==================== 职位管理 ====================
+export function getPositionList(params) {
+  return request({ url: '/hr/positions/', method: 'get', params })
+}
+export function createPosition(data) {
+  return request({ url: '/hr/positions/', method: 'post', data })
+}
+export function updatePosition(id, data) {
+  return request({ url: `/hr/positions/${id}/`, method: 'put', data })
+}
+export function deletePosition(id) {
+  return request({ url: `/hr/positions/${id}/`, method: 'delete' })
+}
+export function getPositionsByDepartment(departmentId) {
+  return request({ url: '/hr/positions/by-department/', method: 'get', params: { department_id: departmentId } })
+}
+
 // ==================== 考勤记录 ====================
 export function getAttendanceList(params) {
   return request({ url: '/hr/attendances/', method: 'get', params })
