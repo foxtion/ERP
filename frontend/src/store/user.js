@@ -9,7 +9,7 @@ export const useUserStore = defineStore(
   'user',
   () => {
     // ==================== State ====================
-    const token = ref(localStorage.getItem('erp_token') || '')
+    const token = ref(sessionStorage.getItem('erp_token') || '')
     const userInfo = ref(null)
     const menus = ref([])
     const permissions = ref([])
@@ -24,14 +24,14 @@ export const useUserStore = defineStore(
     const login = async (credentials) => {
       const res = await loginApi(credentials)
       token.value = res.data.access
-      localStorage.setItem('erp_token', res.data.access)
-      localStorage.setItem('erp_refresh_token', res.data.refresh)
+      sessionStorage.setItem('erp_token', res.data.access)
+      sessionStorage.setItem('erp_refresh_token', res.data.refresh)
       menus.value = res.data.menus || []
       permissions.value = res.data.permissions || []
       userInfo.value = res.data.user
-      localStorage.setItem('erp_menus', JSON.stringify(menus.value))
-      localStorage.setItem('erp_permissions', JSON.stringify(permissions.value))
-      localStorage.setItem('erp_user_info', JSON.stringify(res.data.user))
+      sessionStorage.setItem('erp_menus', JSON.stringify(menus.value))
+      sessionStorage.setItem('erp_permissions', JSON.stringify(permissions.value))
+      sessionStorage.setItem('erp_user_info', JSON.stringify(res.data.user))
       return res
     }
 
@@ -43,23 +43,23 @@ export const useUserStore = defineStore(
       userInfo.value = res.data
       if (res.data.menus) {
         menus.value = res.data.menus
-        localStorage.setItem('erp_menus', JSON.stringify(res.data.menus))
+        sessionStorage.setItem('erp_menus', JSON.stringify(res.data.menus))
       }
       if (res.data.permissions) {
         permissions.value = res.data.permissions
-        localStorage.setItem('erp_permissions', JSON.stringify(res.data.permissions))
+        sessionStorage.setItem('erp_permissions', JSON.stringify(res.data.permissions))
       }
       return res
     }
 
     /**
-     * 从 localStorage 恢复登录状态（页面刷新时调用）
+     * 从 sessionStorage 恢复登录状态（页面刷新时调用）
      */
     const restoreSession = () => {
-      const storedToken = localStorage.getItem('erp_token')
-      const storedMenus = localStorage.getItem('erp_menus')
-      const storedPerms = localStorage.getItem('erp_permissions')
-      const storedUserInfo = localStorage.getItem('erp_user_info')
+      const storedToken = sessionStorage.getItem('erp_token')
+      const storedMenus = sessionStorage.getItem('erp_menus')
+      const storedPerms = sessionStorage.getItem('erp_permissions')
+      const storedUserInfo = sessionStorage.getItem('erp_user_info')
       if (storedToken) {
         token.value = storedToken
         menus.value = storedMenus ? JSON.parse(storedMenus) : []
@@ -81,11 +81,11 @@ export const useUserStore = defineStore(
       userInfo.value = null
       menus.value = []
       permissions.value = []
-      localStorage.removeItem('erp_token')
-      localStorage.removeItem('erp_refresh_token')
-      localStorage.removeItem('erp_menus')
-      localStorage.removeItem('erp_permissions')
-      localStorage.removeItem('erp_user_info')
+      sessionStorage.removeItem('erp_token')
+      sessionStorage.removeItem('erp_refresh_token')
+      sessionStorage.removeItem('erp_menus')
+      sessionStorage.removeItem('erp_permissions')
+      sessionStorage.removeItem('erp_user_info')
     }
 
     /**

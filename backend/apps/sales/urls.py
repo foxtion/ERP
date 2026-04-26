@@ -14,6 +14,7 @@ urlpatterns = [
     path('orders/<int:pk>/confirm/', views.SalesOrderConfirmView.as_view(), name='sales_order_confirm'),
     path('orders/<int:pk>/cancel/', views.SalesOrderCancelView.as_view(), name='sales_order_cancel'),
     path('orders/<int:pk>/complete/', views.SalesOrderCompleteView.as_view(), name='sales_order_complete'),
+    path('orders/export/', views.SalesOrderExportView.as_view(), name='sales_order_export'),
     path('orders/options/', views.SalesOrderOptionsView.as_view(), name='sales_order_options'),
     path('orders/pending-outstock/', views.PendingOutStockOrderView.as_view(), name='pending_outstock_orders'),
     path('orders/<int:pk>/outstock-items/', views.OrderOutStockItemsView.as_view(), name='order_outstock_items'),
@@ -31,5 +32,6 @@ urlpatterns = [
     path('pickings/<int:pk>/accept/', views.SalesPickingListAcceptView.as_view(), name='picking_accept'),
     path('pickings/<int:pk>/pick-item/', views.SalesPickingListPickItemView.as_view(), name='picking_pick_item'),
     path('pickings/<int:pk>/report-shortage/', views.SalesPickingListReportShortageView.as_view(), name='picking_report_shortage'),
+    path('pickings/<int:pk>/refund-item/', views.SalesPickingListRefundItemView.as_view(), name='picking_refund_item'),
     path('pickings/<int:pk>/submit/', views.SalesPickingListSubmitView.as_view(), name='picking_submit'),
 ]

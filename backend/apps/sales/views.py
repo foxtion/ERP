@@ -362,6 +362,88 @@ class SalesOrderCompleteView(views.APIView):
         return success_response(data={'id': pk, 'status': order.status}, message='订单已完成')
 
 
+class SalesOrderExportView(views.APIView):
+    """
+    导出销售订单列表到 Excel
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'sales:order:view'
+
+    def get(self, request):
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        import io
+
+        queryset = SalesOrder.objects.all().order_by('-id')
+        search = request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(order_no__icontains=search) | Q(customer__name__icontains=search)
+            )
+        status = request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = '销售订单'
+
+        headers = ['订单编号', '客户', '订单日期', '交货日期', '状态', '总金额', '销售员', '备注']
+        ws.append(headers)
+
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True)
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+
+        status_map = {
+            'draft': '草稿',
+            'confirmed': '已确认',
+            'partial': '部分出库',
+            'completed': '已完成',
+            'cancelled': '已取消',
+        }
+
+        for order in queryset:
+            ws.append([
+                order.order_no,
+                order.customer.name if order.customer else '',
+                str(order.order_date) if order.order_date else '',
+                str(order.delivery_date) if order.delivery_date else '',
+                status_map.get(order.status, order.status),
+                float(order.total_amount) if order.total_amount else 0,
+                order.salesman.username if order.salesman else '',
+                order.remark or '',
+            ])
+
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=len(headers)):
+            for cell in row:
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical='center')
+
+        col_widths = [20, 20, 12, 12, 10, 12, 12, 30]
+        for i, w in enumerate(col_widths, 1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=sales_orders.xlsx'
+        return response
+
+
 class SalesOrderOptionsView(views.APIView):
     """
     可用于下拉的销售订单列表
@@ -544,6 +626,19 @@ class SalesPickingListListCreateView(CreateResponseMixin, generics.ListCreateAPI
         if not user.is_superuser:
             queryset = queryset.filter(
                 Q(assigned_to=user) | Q(assigned_to__isnull=True)
+            )
+        # 按创建时间范围查询
+        created_at_start = self.request.query_params.get('created_at_start')
+        created_at_end = self.request.query_params.get('created_at_end')
+        if created_at_start:
+            queryset = queryset.filter(created_at__date__gte=created_at_start)
+        if created_at_end:
+            queryset = queryset.filter(created_at__date__lte=created_at_end)
+        # 按员工姓名模糊查询（指派员工或实际拿货人）
+        user_name = self.request.query_params.get('user_name')
+        if user_name:
+            queryset = queryset.filter(
+                Q(assigned_to__username__icontains=user_name) | Q(picker__username__icontains=user_name)
             )
         return queryset
 
@@ -735,6 +830,9 @@ class SalesPickingListPickItemView(views.APIView):
         except (SalesPickingListItem.DoesNotExist, ValueError):
             return error_response(message='拣货明细不存在', code=404)
 
+        if item.status == 'refunded':
+            return error_response(message='该商品已退款，不可操作', code=400)
+
         if picked_qty < 0 or shortage_qty < 0:
             return error_response(message='数量不能为负数', code=400)
 
@@ -797,10 +895,12 @@ class SalesPickingListPickItemView(views.APIView):
     def _update_picking_status(self, picking):
         items = picking.items.all()
         has_shortage = any((i.shortage_qty or 0) > 0 for i in items)
-        all_picked = all((i.picked_qty or 0) >= (i.quantity or 0) for i in items)
-        # 是否所有商品都已处理完毕（已拿完 或 已标记缺货）
+        # 排除已退款的商品后再判断是否全部拿齐
+        active_items = [i for i in items if i.status != 'refunded']
+        all_picked = len(active_items) > 0 and all((i.picked_qty or 0) >= (i.quantity or 0) for i in active_items)
+        # 是否所有商品都已处理完毕（已拿完 或 已标记缺货 或 已退款）
         all_done = all(
-            (i.picked_qty or 0) >= (i.quantity or 0) or (i.shortage_qty or 0) > 0
+            (i.picked_qty or 0) >= (i.quantity or 0) or (i.shortage_qty or 0) > 0 or i.status == 'refunded'
             for i in items
         )
 
@@ -836,6 +936,9 @@ class SalesPickingListReportShortageView(views.APIView):
             item = SalesPickingListItem.objects.get(pk=item_id, picking_list=picking)
         except SalesPickingListItem.DoesNotExist:
             return error_response(message='拣货明细不存在', code=404)
+
+        if item.status == 'refunded':
+            return error_response(message='该商品已退款，不可重复操作', code=400)
 
         warehouse = Warehouse.objects.filter(name=picking.warehouse).first()
         material = Material.objects.filter(code=item.material_code).first()
@@ -963,3 +1066,43 @@ class SalesPickingListSubmitView(views.APIView):
             data={'picking_id': picking.id, 'outstock_no': outstock.stock_no},
             message='发货提交成功'
         )
+
+
+class SalesPickingListRefundItemView(views.APIView):
+    """
+    标记拣货明细已退款
+    POST /pickings/<pk>/refund-item/  {item_id}
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    required_permission = 'sales:picking:edit'
+
+    def post(self, request, pk):
+        try:
+            picking = SalesPickingList.objects.get(pk=pk)
+        except SalesPickingList.DoesNotExist:
+            return error_response(message='拣货单不存在', code=404)
+
+        if picking.status in ('done', 'cancelled'):
+            return error_response(message='该拣货单当前不可操作', code=400)
+
+        item_id = request.data.get('item_id')
+        if not item_id:
+            return error_response(message='缺少 item_id 参数', code=400)
+
+        try:
+            item = SalesPickingListItem.objects.get(pk=item_id, picking_list=picking)
+        except (SalesPickingListItem.DoesNotExist, ValueError):
+            return error_response(message='拣货明细不存在', code=404)
+
+        if item.status == 'refunded':
+            return error_response(message='该商品已标记退款', code=400)
+
+        item.picked_qty = Decimal('0')
+        item.shortage_qty = Decimal('0')
+        item.refunded_qty = item.quantity or Decimal('0')
+        item.status = 'refunded'
+        item.save()
+
+        # 更新拣货单状态
+        SalesPickingListPickItemView()._update_picking_status(picking)
+        return success_response(data=SalesPickingListSerializer(picking).data, message='标记退款成功')

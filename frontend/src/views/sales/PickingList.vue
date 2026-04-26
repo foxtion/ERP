@@ -4,6 +4,7 @@
       <div class="toolbar">
         <div class="filter-bar">
           <el-input v-model="query.search" placeholder="拣货单号/订单编号" clearable style="width: 200px" @keyup.enter="fetchData" />
+          <el-input v-model="query.user_name" placeholder="员工姓名" clearable style="width: 140px" @keyup.enter="fetchData" />
           <el-select v-model="query.status" placeholder="状态" clearable style="width: 140px">
             <el-option label="待指派" value="pending" />
             <el-option label="已指派" value="assigned" />
@@ -14,6 +15,17 @@
             <el-option label="已完成" value="done" />
             <el-option label="已取消" value="cancelled" />
           </el-select>
+          <el-date-picker
+            v-model="query.created_at_range"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="创建开始"
+            end-placeholder="创建结束"
+            value-format="YYYY-MM-DD"
+            clearable
+            style="width: 260px"
+            @change="fetchData"
+          />
           <el-button type="primary" @click="fetchData">查询</el-button>
           <el-button @click="resetQuery">重置</el-button>
         </div>
@@ -123,7 +135,7 @@ const isAdmin = computed(() => userStore.userInfo?.is_superuser)
 const tableData = ref([])
 const total = ref(0)
 const loading = ref(false)
-const query = ref({ page: 1, size: 10, search: '', status: '' })
+const query = ref({ page: 1, size: 10, search: '', status: '', user_name: '', created_at_range: null })
 
 const viewVisible = ref(false)
 const currentRow = ref(null)
@@ -149,7 +161,13 @@ const statusType = (s) => ({
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await getPickingList(query.value)
+    const params = { ...query.value }
+    if (params.created_at_range && params.created_at_range.length === 2) {
+      params.created_at_start = params.created_at_range[0]
+      params.created_at_end = params.created_at_range[1]
+    }
+    delete params.created_at_range
+    const res = await getPickingList(params)
     tableData.value = res.data.list
     total.value = res.data.pagination.total
   } finally {
@@ -175,7 +193,7 @@ onMounted(() => {
 })
 
 const resetQuery = () => {
-  query.value = { page: 1, size: 10, search: '', status: '' }
+  query.value = { page: 1, size: 10, search: '', status: '', user_name: '', created_at_range: null }
   fetchData()
 }
 

@@ -103,7 +103,7 @@ class InventorySerializer(serializers.ModelSerializer):
         # Inventory 无 material 外键，通过名称查询 Material 表获取真实阈值
         from apps.inventory.models import Material
         material = Material.objects.filter(name=obj.material_name).first()
-        threshold = material.warning_threshold if material else (obj.warning_threshold or 50)
+        threshold = material.warning_threshold if material else 50
         return '预警' if obj.qty <= threshold else '正常'
 
     def get_material_code(self, obj):

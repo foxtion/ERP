@@ -17,7 +17,7 @@ app.directive('permission', permissionDirective)
 
 app.use(createPinia())
 
-// 应用启动时恢复用户登录状态（从 localStorage 读取 Token）
+// 应用启动时恢复用户登录状态（从 sessionStorage 读取 Token，关闭浏览器后失效）
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
 userStore.restoreSession()

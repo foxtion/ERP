@@ -39,6 +39,10 @@ export function deleteSalesOrder(id) {
 export function getSalesOrderOptions() {
   return request({ url: '/sales/orders/options/', method: 'get' })
 }
+export function exportSalesOrders(params) {
+  return request({ url: '/sales/orders/export/', method: 'get', params, responseType: 'blob' })
+}
+
 export function confirmOrder(id) {
   return request({ url: `/sales/orders/${id}/confirm/`, method: 'post' })
 }
@@ -113,4 +117,7 @@ export function reportShortage(id, itemId, remark) {
 }
 export function submitPicking(id) {
   return request({ url: `/sales/pickings/${id}/submit/`, method: 'post' })
+}
+export function refundItem(id, itemId) {
+  return request({ url: `/sales/pickings/${id}/refund-item/`, method: 'post', data: { item_id: itemId } })
 }

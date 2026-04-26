@@ -26,7 +26,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="material_code" label="商品代码" width="110" />
-        <el-table-column prop="material_name" label="商品名称" min-width="160" />
+        <el-table-column prop="material_name" label="商品名称" min-width="120" show-overflow-tooltip />
         <el-table-column prop="spec" label="规格" width="90" />
         <el-table-column label="需拿数量" width="90" align="center">
           <template #default="{ row }">
@@ -40,19 +40,19 @@
         </el-table-column>
         <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.status === 'picked' ? 'success' : row.status === 'shortage' ? 'danger' : 'info'">
-              {{ {pending:'待拿', picked:'已拿', shortage:'缺货'}[row.status] || row.status }}
+            <el-tag size="small" :type="row.status === 'picked' ? 'success' : row.status === 'shortage' ? 'danger' : row.status === 'refunded' ? 'info' : 'info'">
+              {{ {pending:'待拿', picked:'已拿', shortage:'缺货', refunded:'已退款'}[row.status] || row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" align="center" fixed="right">
+        <el-table-column label="操作" width="340" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-row">
               <el-button
                 v-if="!['pending','assigned','done','cancelled'].includes(picking.status)"
                 size="small"
                 type="success"
-                :disabled="row.status === 'picked'"
+                :disabled="row.status === 'picked' || row.status === 'refunded'"
                 @click="openPickDialog(row, 'pick')"
               >已拿</el-button>
               <el-button
@@ -68,6 +68,13 @@
                 type="warning"
                 @click="handleReport(row)"
               >报告缺货</el-button>
+              <el-button
+                v-if="!['pending','assigned','done','cancelled'].includes(picking.status)"
+                size="small"
+                type="info"
+                :disabled="row.status === 'refunded'"
+                @click="handleRefund(row)"
+              >已退款</el-button>
             </div>
           </template>
         </el-table-column>
@@ -79,6 +86,7 @@
           <span>总商品数：{{ picking.items?.length || 0 }}</span>
           <span>已拿：{{ pickedCount }}</span>
           <span>缺货：{{ shortageCount }}</span>
+          <span>退款：{{ refundedCount }}</span>
         </div>
         <div class="buttons" v-if="['picking','complete','shortage'].includes(picking.status)">
           <el-button type="success" size="large" :disabled="!canComplete" @click="handleSubmit('complete')">
@@ -145,7 +153,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getPickingDetail, acceptPicking, pickItem,
-  reportShortage, submitPicking
+  reportShortage, submitPicking, refundItem
 } from '@/api/sales'
 
 const route = useRoute()
@@ -199,10 +207,14 @@ const pickedClass = (row) => {
 
 const pickedCount = computed(() => picking.value?.items?.filter(i => i.status === 'picked').length || 0)
 const shortageCount = computed(() => picking.value?.items?.filter(i => i.status === 'shortage').length || 0)
+const refundedCount = computed(() => picking.value?.items?.filter(i => i.status === 'refunded').length || 0)
 
 const canComplete = computed(() => {
   if (!picking.value?.items?.length) return false
-  return picking.value.items.every(i => (i.picked_qty || 0) >= (i.quantity || 0))
+  return picking.value.items.every(i => {
+    if (i.status === 'refunded') return true
+    return (i.picked_qty || 0) >= (i.quantity || 0)
+  })
 })
 
 const canShortage = computed(() => {
@@ -299,6 +311,23 @@ const confirmReport = async () => {
     ElMessage.error(e?.response?.data?.message || e?.message || '上报失败')
   } finally {
     reportLoading.value = false
+  }
+}
+
+const handleRefund = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定将商品「${row.material_name}」标记为已退款吗？标记后该商品将不再参与拣货和出库。`,
+      '确认退款',
+      { type: 'warning' }
+    )
+    await refundItem(pickingId.value, row.id)
+    ElMessage.success('标记退款成功')
+    await fetchDetail()
+  } catch (e) {
+    if (e !== 'cancel' && e?.action !== 'cancel') {
+      ElMessage.error(e?.response?.data?.message || e?.message || '操作失败')
+    }
   }
 }
 

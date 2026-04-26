@@ -257,6 +257,7 @@ class SalesPickingListItem(models.Model):
         ('pending', '待拿'),
         ('picked', '已拿'),
         ('shortage', '缺货'),
+        ('refunded', '已退款'),
     )
 
     picking_list = models.ForeignKey(SalesPickingList, on_delete=models.CASCADE, related_name='items', verbose_name='拣货单')
@@ -269,6 +270,7 @@ class SalesPickingListItem(models.Model):
     location_code = models.CharField(max_length=64, blank=True, null=True, verbose_name='库位号')
     picked_qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='实际拿到数量')
     shortage_qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='缺货数量')
+    refunded_qty = models.DecimalField(max_digits=14, decimal_places=4, default=0, verbose_name='退款数量')
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', verbose_name='状态')
     image = models.CharField(max_length=255, blank=True, null=True, verbose_name='商品图片')
     remark = models.CharField(max_length=255, blank=True, null=True, verbose_name='备注')

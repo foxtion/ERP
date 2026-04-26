@@ -39,11 +39,11 @@ function handleLogout() {
   userStore.userInfo = null
   userStore.menus = []
   userStore.permissions = []
-  localStorage.removeItem('erp_token')
-  localStorage.removeItem('erp_refresh_token')
-  localStorage.removeItem('erp_menus')
-  localStorage.removeItem('erp_permissions')
-  localStorage.removeItem('erp_user_info')
+  sessionStorage.removeItem('erp_token')
+  sessionStorage.removeItem('erp_refresh_token')
+  sessionStorage.removeItem('erp_menus')
+  sessionStorage.removeItem('erp_permissions')
+  sessionStorage.removeItem('erp_user_info')
   permissionStore.clearRoutes()
   router.push(`/login?redirect=${encodeURIComponent(router.currentRoute.value.fullPath)}`)
   // 延迟重置锁，避免短时间内重复触发
@@ -122,7 +122,7 @@ request.interceptors.response.use(
             fullUrl.includes('/auth/logout/') || fullUrl.includes('/auth/refresh/')) {
           return Promise.reject(error)
         }
-        const refreshToken = localStorage.getItem('erp_refresh_token')
+        const refreshToken = sessionStorage.getItem('erp_refresh_token')
         if (!refreshToken) {
           ElMessage.error('登录已过期，请重新登录')
           handleLogout()
@@ -136,7 +136,7 @@ request.interceptors.response.use(
           try {
             const res = await doRefreshToken(refreshToken)
             const newAccessToken = res.data?.access || res.access
-            localStorage.setItem('erp_token', newAccessToken)
+            sessionStorage.setItem('erp_token', newAccessToken)
             const userStore = useUserStore()
             userStore.token = newAccessToken
             isRefreshing = false

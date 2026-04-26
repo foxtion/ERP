@@ -2,7 +2,10 @@
   <div class="page-container">
     <el-card>
       <div class="toolbar">
-        <el-button v-permission="'sales:order:add'" type="primary" @click="handleAdd">新增订单</el-button>
+        <div class="left-btns">
+          <el-button v-permission="'sales:order:add'" type="primary" @click="handleAdd">新增订单</el-button>
+          <el-button type="success" @click="handleExport">导出 Excel</el-button>
+        </div>
         <div class="filter-bar">
           <el-input v-model="query.search" placeholder="订单编号/客户名称" clearable style="width: 200px" @keyup.enter="fetchData" />
           <el-select v-model="query.status" placeholder="订单状态" clearable style="width: 140px">
@@ -88,7 +91,7 @@
       <el-table :data="form.items" border size="small">
         <el-table-column label="物料编码" min-width="120">
           <template #default="{ $index }">
-            <el-input v-model="form.items[$index].material_code" placeholder="编码" disabled />
+            <el-input v-model="form.items[$index].material_code" placeholder="输入或选择物料自动填充" />
           </template>
         </el-table-column>
         <el-table-column label="物料名称" min-width="180">
@@ -157,7 +160,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder, confirmOrder, cancelOrder, createPickingFromOrder } from '@/api/sales'
+import { getSalesOrderList, createSalesOrder, updateSalesOrder, deleteSalesOrder, confirmOrder, cancelOrder, createPickingFromOrder, exportSalesOrders } from '@/api/sales'
 import { getCustomerList } from '@/api/sales'
 import { getMaterialOptions } from '@/api/inventory'
 
@@ -356,11 +359,29 @@ const handleCreatePicking = async (row) => {
     // 取消或报错
   }
 }
+
+const handleExport = async () => {
+  try {
+    const res = await exportSalesOrders({ search: query.value.search, status: query.value.status })
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `销售订单_${new Date().toISOString().slice(0, 10)}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    ElMessage.error('导出失败')
+  }
+}
 </script>
 
 <style scoped>
 .page-container { padding: 20px; }
 .toolbar { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+.left-btns { display: flex; gap: 10px; align-items: center; }
 .filter-bar { display: flex; gap: 10px; align-items: center; }
 .pagination { margin-top: 15px; justify-content: flex-end; }
 .sub-title { font-weight: bold; margin: 15px 0 8px; }
