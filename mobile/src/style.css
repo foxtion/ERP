@@ -1,0 +1,147 @@
+/* ========== 全局重置 ========== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+  color: #323233;
+}
+
+/* ========== 页面容器 ========== */
+.page-container {
+  min-height: 100vh;
+  padding-bottom: 60px;
+  background-color: #f5f5f5;
+}
+
+/* ========== 列表页通用 ========== */
+.list-page {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.list-page .search-bar {
+  padding: 10px 12px;
+  background-color: #fff;
+}
+
+.list-page .filter-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.list-page .content-list {
+  padding: 8px 12px;
+}
+
+/* ========== 详情页通用 ========== */
+.detail-page {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.detail-page .detail-card {
+  margin: 10px 12px;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.detail-page .detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+}
+
+.detail-page .detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-page .detail-item .label {
+  color: #969799;
+}
+
+.detail-page .detail-item .value {
+  color: #323233;
+  text-align: right;
+  flex: 1;
+  margin-left: 12px;
+}
+
+/* ========== 表单页通用 ========== */
+.form-page {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.form-page .form-card {
+  margin: 10px 12px;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* ========== 空数据 ========== */
+.empty-wrap {
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* ========== 加载更多 ========== */
+.load-more {
+  text-align: center;
+  padding: 12px;
+  color: #969799;
+  font-size: 13px;
+}
+
+/* ========== Vant 弹框/Toast 文字保护 ========== */
+.van-dialog__header {
+  color: #323233 !important;
+}
+.van-dialog__message {
+  color: #323233 !important;
+}
+.van-toast__text {
+  color: #fff !important;
+}
+.van-dialog__footer .van-button__text {
+  color: #323233 !important;
+}
+.van-dialog__footer .van-dialog__confirm .van-button__text {
+  color: #ee0a24 !important;
+}
+
+/* ========== 工具类 ========== */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-primary { color: #1989fa; }
+.text-success { color: #07c160; }
+.text-danger { color: #ee0a24; }
+.text-warning { color: #ff976a; }
+.text-gray { color: #969799; }
+
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.ml-8 { margin-left: 8px; }
+.mr-8 { margin-right: 8px; }
+
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.justify-between { justify-content: space-between; }
+.align-center { align-items: center; }
+.gap-8 { gap: 8px; }
