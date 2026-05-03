@@ -27,7 +27,7 @@
         @click="goDetail(item)"
       >
         <div class="card-header">
-          <span class="title">{{ item.outstock_no }}</span>
+          <span class="title">{{ item.stock_no }}</span>
           <van-tag type="success" size="medium">已出库</van-tag>
         </div>
         <div class="card-body">
@@ -37,15 +37,15 @@
           </div>
           <div class="info-row">
             <span class="label">出库日期：</span>
-            <span class="value">{{ item.outstock_date }}</span>
+            <span class="value">{{ item.stock_date }}</span>
           </div>
           <div class="info-row">
             <span class="label">仓库：</span>
-            <span class="value">{{ item.warehouse_name || '-' }}</span>
+            <span class="value">{{ item.warehouse || '-' }}</span>
           </div>
           <div class="info-row">
             <span class="label">出库数量：</span>
-            <span class="value">{{ item.total_qty || 0 }}</span>
+            <span class="value">{{ item.items?.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0) || 0 }}</span>
           </div>
         </div>
         <div class="card-footer">
@@ -112,7 +112,7 @@ const onDelete = async (item) => {
   try {
     await showConfirmDialog({
       title: '确认删除',
-      message: `确定删除出库单「${item.outstock_no}」吗？`,
+      message: `确定删除出库单「${item.stock_no}」吗？`,
     })
     await deleteOutStock(item.id)
     showToast('删除成功')

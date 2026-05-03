@@ -73,9 +73,14 @@ const onSubmit = async () => {
       localStorage.removeItem('erp_remember_username')
     }
 
-    // 生成动态路由
+    // 生成动态路由并注册到 router
     if (userStore.menus.length > 0) {
-      permissionStore.generateRoutes(userStore.menus)
+      const routes = permissionStore.generateRoutes(userStore.menus)
+      routes.forEach((route) => {
+        if (!router.hasRoute(route.name)) {
+          router.addRoute('Layout', route)
+        }
+      })
     }
 
     showToast({ type: 'success', message: '登录成功' })

@@ -36,9 +36,17 @@ def custom_exception_handler(exc, context):
             'data': response.data
         }, status=response.status_code)
 
-    logger.exception('服务器内部错误')
+    # DEBUG 模式下返回详细错误信息，方便定位问题
+    from django.conf import settings
+    if settings.DEBUG:
+        import traceback
+        tb = traceback.format_exc()
+        message = f'{str(exc)}\n{tb}'
+    else:
+        message = '服务器内部错误'
+    logger.exception('服务器内部错误: %s', exc)
     return Response({
         'code': 500,
-        'message': '服务器内部错误',
+        'message': message,
         'data': {}
     }, status=500)

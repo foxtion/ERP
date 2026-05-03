@@ -74,6 +74,9 @@ export function updateOutStock(id, data) {
 export function deleteOutStock(id) {
   return request({ url: `/sales/outstocks/${id}/`, method: 'delete' })
 }
+export function getOutStockDetail(id) {
+  return request({ url: `/sales/outstocks/${id}/`, method: 'get' })
+}
 export function getPendingOutStockOrders() {
   return request({ url: '/sales/orders/pending-outstock/', method: 'get' })
 }

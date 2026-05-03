@@ -108,11 +108,17 @@ html, body, #app {
 }
 
 /* ========== Vant 弹框/Toast 文字保护 ========== */
-.van-dialog__header {
+.van-dialog,
+.van-dialog__header,
+.van-dialog__message,
+.van-dialog__message--has-title {
   color: #323233 !important;
 }
-.van-dialog__message {
-  color: #323233 !important;
+.van-dialog__message,
+.van-dialog__message--has-title {
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  padding: 20px 24px !important;
 }
 .van-toast__text {
   color: #fff !important;

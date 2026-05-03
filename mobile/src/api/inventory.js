@@ -33,6 +33,9 @@ export function updateLocation(id, data) {
 export function deleteLocation(id) {
   return request({ url: `/inventory/locations/${id}/`, method: 'delete' })
 }
+export function getLocationDetail(id) {
+  return request({ url: `/inventory/locations/${id}/`, method: 'get' })
+}
 
 // ==================== 物料档案 ====================
 export function getMaterialList(params) {
@@ -49,6 +52,9 @@ export function deleteMaterial(id) {
 }
 export function patchMaterial(id, data) {
   return request({ url: `/inventory/materials/${id}/`, method: 'patch', data })
+}
+export function getMaterialDetail(id) {
+  return request({ url: `/inventory/materials/${id}/`, method: 'get' })
 }
 export function getMaterialOptions(params) {
   return request({ url: '/inventory/materials/options/', method: 'get', params })

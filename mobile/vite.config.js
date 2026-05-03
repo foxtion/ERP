@@ -6,6 +6,7 @@ import { resolve } from 'path'
 import pxtovw from 'postcss-px-to-viewport'
 
 export default defineConfig({
+  // base: '/mobile/',
   plugins: [
     vue(),
     Components({

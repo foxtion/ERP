@@ -21,6 +21,9 @@ export function deleteSubject(id) {
 export function getVoucherList(params) {
   return request({ url: '/finance/vouchers/', method: 'get', params })
 }
+export function getVoucherDetail(id) {
+  return request({ url: `/finance/vouchers/${id}/`, method: 'get' })
+}
 export function createVoucher(data) {
   return request({ url: '/finance/vouchers/', method: 'post', data })
 }
@@ -44,6 +47,9 @@ export function generateVoucherNo() {
 export function getReceivableList(params) {
   return request({ url: '/finance/receivables/', method: 'get', params })
 }
+export function getReceivableDetail(id) {
+  return request({ url: `/finance/receivables/${id}/`, method: 'get' })
+}
 export function createReceivable(data) {
   return request({ url: '/finance/receivables/', method: 'post', data })
 }
@@ -60,6 +66,9 @@ export function getOverdueReceivables() {
 // ==================== 收付款 ====================
 export function getPaymentList(params) {
   return request({ url: '/finance/payments/', method: 'get', params })
+}
+export function getPaymentDetail(id) {
+  return request({ url: `/finance/payments/${id}/`, method: 'get' })
 }
 export function createPayment(data) {
   return request({ url: '/finance/payments/', method: 'post', data })

@@ -59,6 +59,9 @@ export function getPlanOptions() {
 export function getWorkOrderList(params) {
   return request({ url: '/production/orders/', method: 'get', params })
 }
+export function getWorkOrderDetail(id) {
+  return request({ url: `/production/orders/${id}/`, method: 'get' })
+}
 export function createWorkOrder(data) {
   return request({ url: '/production/orders/', method: 'post', data })
 }
@@ -94,6 +97,9 @@ export function getWorkOrderOptions() {
 export function getRequisitionList(params) {
   return request({ url: '/production/requisitions/', method: 'get', params })
 }
+export function getRequisitionDetail(id) {
+  return request({ url: `/production/requisitions/${id}/`, method: 'get' })
+}
 export function createRequisition(data) {
   return request({ url: '/production/requisitions/', method: 'post', data })
 }
@@ -119,6 +125,9 @@ export function cancelRequisition(id) {
 // ==================== 生产入库 ====================
 export function getProductionInStockList(params) {
   return request({ url: '/production/instocks/', method: 'get', params })
+}
+export function getProductionInStockDetail(id) {
+  return request({ url: `/production/instocks/${id}/`, method: 'get' })
 }
 export function createProductionInStock(data) {
   return request({ url: '/production/instocks/', method: 'post', data })

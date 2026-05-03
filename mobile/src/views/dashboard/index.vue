@@ -70,7 +70,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showConfirmDialog, showFailToast } from 'vant'
+import { showToast, showConfirmDialog, showDialog } from 'vant'
 import { useUserStore } from '@/store/user'
 import { usePermissionStore } from '@/store/permission'
 import { changePassword } from '@/api/auth'
@@ -319,20 +319,21 @@ const showAbout = () => {
 
 const onChangePassword = async () => {
   if (!pwdForm.value.old_password || !pwdForm.value.new_password) {
-    showFailToast('请填写完整密码信息')
+    showDialog({ title: '提示', message: '请填写完整密码信息' })
     return
   }
   if (pwdForm.value.new_password !== pwdForm.value.confirm_password) {
-    showFailToast('两次输入的新密码不一致')
+    showDialog({ title: '提示', message: '两次输入的新密码不一致' })
     return
   }
   try {
     await changePassword(pwdForm.value)
-    showToast('密码修改成功，请重新登录')
-    await userStore.logout()
-    router.push('/login')
+    showDialog({ title: '成功', message: '密码修改成功，请重新登录' }).then(async () => {
+      await userStore.logout()
+      router.push('/login')
+    })
   } catch (e) {
-    showFailToast(e?.response?.data?.message || '修改失败')
+    showDialog({ title: '提示', message: e?.response?.data?.message || '修改失败' })
   }
 }
 </script>

@@ -5,11 +5,14 @@ const modules = import.meta.glob('@/views/**/*.vue')
 
 function loadComponent(path) {
   const keys = Object.keys(modules)
+  const normalizedPath = path.replace(/\\/g, '/').replace(/\.vue$/, '')
   for (const key of keys) {
-    if (key.endsWith(path + '.vue')) return modules[key]
+    const normalizedKey = key.replace(/\\/g, '/')
+    if (normalizedKey.endsWith(normalizedPath + '.vue')) return modules[key]
   }
   for (const key of keys) {
-    if (key.includes(path)) return modules[key]
+    const normalizedKey = key.replace(/\\/g, '/')
+    if (normalizedKey.includes(normalizedPath)) return modules[key]
   }
   return null
 }
