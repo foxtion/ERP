@@ -36,6 +36,20 @@
       </van-cell-group>
     </div>
 
+    <!-- 退出确认弹窗 -->
+    <van-dialog
+      v-model:show="showLogoutDialog"
+      title="确认退出"
+      show-cancel-button
+      @confirm="onConfirmLogout"
+    >
+      <div style="padding: 20px 24px; text-align: center; color: #323233;">
+        确定要退出登录吗？
+      </div>
+    </van-dialog>
+
+
+
     <!-- 修改密码弹窗 -->
     <van-dialog
       v-model:show="showChangePassword"
@@ -70,10 +84,11 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showConfirmDialog, showDialog } from 'vant'
+import { showDialog, showToast } from 'vant'
 import { useUserStore } from '@/store/user'
 import { usePermissionStore } from '@/store/permission'
 import { changePassword } from '@/api/auth'
+import { mapIcon } from '@/utils/icon-map'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -108,206 +123,20 @@ const navigateTo = (path) => {
   router.push(path)
 }
 
-// 把菜单路径或 Element Plus 图标名映射到 Vant 图标名
-const mapIcon = (icon, path) => {
-  // 标准化路径：统一加上 / 前缀，去除尾部斜杠
-  const normalized = (p) => {
-    if (!p) return ''
-    let s = p.trim()
-    if (!s.startsWith('/')) s = '/' + s
-    if (s.endsWith('/')) s = s.slice(0, -1)
-    return s
-  }
-
-  // 优先按路径精确映射，确保每个菜单都有独特图标
-  const pathMap = {
-    '/system/user': 'manager-o',
-    '/system/role': 'friends-o',
-    '/system/menu': 'apps-o',
-    '/system/dept': 'cluster-o',
-    '/purchase/supplier': 'shop-o',
-    '/purchase/order': 'cart-o',
-    '/sales/customer': 'contact-o',
-    '/sales/order': 'orders-o',
-    '/inventory/warehouse': 'home-o',
-    '/inventory/stock': 'search',
-    '/inventory/stocks': 'search',
-    '/sales/picking-list': 'todo-list-o',
-    '/sales/picking_list': 'todo-list-o',
-    '/inventory/material': 'label-o',
-    '/inventory/location': 'location-o',
-    '/inventory/warning': 'warning-o',
-    '/production/bom': 'records-o',
-    '/production/workorder': 'description-o',
-    '/production/plan': 'calendar-o',
-    '/production/requisition': 'medal-o',
-    '/production/instock': 'arrow-down',
-    '/production/instocks': 'arrow-down',
-    '/finance/receivable': 'balance-o',
-    '/finance/voucher': 'edit',
-    '/finance/vouchers': 'edit',
-    '/finance/payment': 'balance-o',
-    '/finance/payments': 'balance-o',
-    '/finance/statement': 'chart-trending-o',
-    '/hr/employee': 'idcard',
-    '/hr/employees': 'idcard',
-    '/hr/attendance': 'clock-o',
-    '/sales/outstock': 'logistics',
-    '/sales/outstocks': 'logistics',
-    '/inventory/outstock': 'logistics',
-    '/inventory/outstocks': 'logistics',
-    '/sales/return': 'refund-o',
-    '/inventory/transfer': 'logistics',
-    '/inventory/transfers': 'logistics',
-    '/inventory/check': 'search-o',
-    '/purchase/request': 'records-o',
-    '/purchase/instock': 'down-o',
-    '/production/order': 'description-o',
-  }
-  const np = normalized(path)
-  if (np && pathMap[np]) return pathMap[np]
-
-  // 按路径最后一段模糊匹配
-  const lastSegment = np.split('/').pop()
-  const segmentMap = {
-    'user': 'manager-o',
-    'role': 'friends-o',
-    'menu': 'apps-o',
-    'dept': 'cluster-o',
-    'supplier': 'shop-o',
-    'order': 'orders-o',
-    'customer': 'contact-o',
-    'warehouse': 'home-o',
-    'stock': 'search',
-    'stocks': 'search',
-    'picking-list': 'todo-list-o',
-    'picking_list': 'todo-list-o',
-    'material': 'label-o',
-    'location': 'location-o',
-    'warning': 'warning-o',
-    'bom': 'records-o',
-    'workorder': 'description-o',
-    'plan': 'calendar-o',
-    'requisition': 'medal-o',
-    'instock': 'arrow-down',
-    'instocks': 'arrow-down',
-    'receivable': 'balance-o',
-    'voucher': 'edit',
-    'vouchers': 'edit',
-    'payment': 'balance-o',
-    'payments': 'balance-o',
-    'statement': 'chart-trending-o',
-    'employee': 'idcard',
-    'employees': 'idcard',
-    'attendance': 'clock-o',
-    'outstock': 'logistics',
-    'outstocks': 'logistics',
-    'outstock-job': 'logistics',
-    'return': 'refund-o',
-    'transfer': 'logistics',
-    'transfers': 'logistics',
-    'check': 'search-o',
-    'request': 'records-o',
-  }
-  if (lastSegment && segmentMap[lastSegment]) return segmentMap[lastSegment]
-
-  if (lastSegment && !segmentMap[lastSegment]) {
-    console.log('[Dashboard] unknown path segment:', lastSegment, 'full path:', path, 'icon:', icon)
-  }
-
-  // 兜底：按 Element Plus 图标名映射
-  const map = {
-    'HomeFilled': 'home-o',
-    'UserFilled': 'manager-o',
-    'User': 'manager-o',
-    'OfficeBuilding': 'cluster-o',
-    'List': 'apps-o',
-    'Menu': 'apps-o',
-    'Grid': 'apps-o',
-    'Setting': 'setting-o',
-    'Tools': 'setting-o',
-    'ShoppingCart': 'cart-o',
-    'ShoppingBag': 'bag-o',
-    'Goods': 'goods-collect-o',
-    'Box': 'logistics-o',
-    'Warehouse': 'home-o',
-    'Money': 'balance-o',
-    'Coin': 'balance-o',
-    'Document': 'description-o',
-    'DocumentChecked': 'records-o',
-    'DocumentCopy': 'orders-o',
-    'Tickets': 'coupon-o',
-    'Calendar': 'calendar-o',
-    'Clock': 'clock-o',
-    'TrendCharts': 'chart-trending-o',
-    'Histogram': 'bar-chart-o',
-    'PieChart': 'chart-trending-o',
-    'CircleCheck': 'checked-o',
-    'CircleClose': 'close-o',
-    'Warning': 'warning-o',
-    'InfoFilled': 'info-o',
-    'QuestionFilled': 'question-o',
-    'Avatar': 'user-circle-o',
-    'Stamp': 'passed-o',
-    'Sell': 'cart-o',
-    'Shop': 'shop-o',
-    'Truck': 'logistics-o',
-    'FirstAidKit': 'medal-o',
-    'Suitcase': 'friends-o',
-    'Discount': 'discount-o',
-    'PriceTag': 'label-o',
-    'Message': 'comment-o',
-    'Bell': 'bell-o',
-    'Phone': 'phone-o',
-    'Location': 'location-o',
-    'MapLocation': 'location-o',
-    'Van': 'logistics-o',
-    'Notebook': 'notes-o',
-    'DataAnalysis': 'chart-trending-o',
-    'Management': 'manager-o',
-    'Promotion': 'point-gift-o',
-    'Present': 'gift-o',
-    'GobletFull': 'gem-o',
-    'Goblet': 'gem-o',
-    'Food': 'smile-o',
-    'Dish': 'smile-o',
-    'DishDot': 'smile-o',
-    'Chicken': 'smile-o',
-    'ForkSpoon': 'smile-o',
-    'KnifeFork': 'smile-o',
-    'Burger': 'smile-o',
-    'IceCream': 'smile-o',
-    'IceDrink': 'smile-o',
-    'Coffee': 'smile-o',
-    'Mug': 'smile-o',
-    'ColdDrink': 'smile-o',
-    'Grape': 'smile-o',
-    'Watermelon': 'smile-o',
-    'Cherry': 'smile-o',
-    'Apple': 'smile-o',
-    'Pear': 'smile-o',
-    'Orange': 'smile-o',
-    'IceTea': 'smile-o',
-    'MilkTea': 'smile-o',
-    'Lemon': 'smile-o',
-    'Sugar': 'smile-o',
-    'Bowl': 'smile-o',
-    'IceCreamRound': 'smile-o',
-    'IceCreamSquare': 'smile-o',
-  }
-  return map[icon] || 'apps-o'
-}
+const showLogoutDialog = ref(false)
 
 const handleLogout = () => {
-  showConfirmDialog({
-    title: '确认退出',
-    message: '确定要退出登录吗？',
-  }).then(async () => {
-    await userStore.logout()
-    permissionStore.clearRoutes()
+  showLogoutDialog.value = true
+}
+
+const onConfirmLogout = async () => {
+  showLogoutDialog.value = false
+  await userStore.logout()
+  permissionStore.clearRoutes()
+  showToast({ message: '已退出登录', className: 'van-toast--white' })
+  setTimeout(() => {
     router.push('/login')
-    showToast('已退出登录')
-  }).catch(() => {})
+  }, 1500)
 }
 
 const showChangePassword = ref(false)

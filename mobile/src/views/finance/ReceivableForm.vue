@@ -109,7 +109,7 @@ const onSubmit = async () => {
     const data = {
       doc_type: form.value.doc_type,
       counterparty: form.value.counterparty,
-      amount: form.value.amount !== '' ? parseFloat(form.value.amount) : 0,
+      amount: form.value.amount !== '' && form.value.amount != null ? parseFloat(form.value.amount) || 0 : 0,
       bill_date: form.value.bill_date,
       remark: form.value.remark || null,
     }
@@ -120,7 +120,7 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    showToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   } finally { submitting.value = false }
 }
 

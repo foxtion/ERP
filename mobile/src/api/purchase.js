@@ -74,6 +74,16 @@ export function exportPurchaseOrders(params) {
 export function getPurchaseOrderOptions() {
   return request({ url: '/purchase/orders/options/', method: 'get' })
 }
+export function submitRequest(id) {
+  return request({ url: `/purchase/requests/${id}/submit/`, method: 'post', data: {} })
+}
+export function approveRequest(id) {
+  return request({ url: `/purchase/requests/${id}/approve/`, method: 'post', data: {} })
+}
+export function rejectRequest(id) {
+  return request({ url: `/purchase/requests/${id}/reject/`, method: 'post', data: {} })
+}
+
 export function getPurchaseOrderDetail(id) {
   return request({ url: `/purchase/orders/${id}/`, method: 'get' })
 }

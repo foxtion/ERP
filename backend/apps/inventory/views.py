@@ -65,11 +65,10 @@ class InventoryListView(generics.ListAPIView):
     serializer_class = InventorySerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     required_permission = 'inventory:stock:view'
-    search_fields = ['material_name', 'spec']
     filterset_fields = ['warehouse']
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = Inventory.objects.all().order_by('-id')
         # 自动更新预警状态（使用各物料真实阈值）
         warning = self.request.query_params.get('warning')
         if warning == 'true':
@@ -79,17 +78,18 @@ class InventoryListView(generics.ListAPIView):
             queryset = queryset.annotate(
                 real_threshold=Subquery(threshold_subquery)
             ).filter(qty__lte=models.F('real_threshold'))
-        # 支持按物料编码搜索
+        # 支持按物料名称/编码/规格搜索（空值时不过滤，展示全部）
         search = self.request.query_params.get('search')
         if search:
             from apps.inventory.models import Material
-            matched_codes = Material.objects.filter(
+            # 先按编码或名称匹配物料表，获取对应名称
+            matched_names = Material.objects.filter(
                 models.Q(code__icontains=search) | models.Q(name__icontains=search)
             ).exclude(name='').values_list('name', flat=True)
             queryset = queryset.filter(
                 models.Q(material_name__icontains=search) |
                 models.Q(spec__icontains=search) |
-                models.Q(material_name__in=list(matched_codes))
+                models.Q(material_name__in=list(matched_names))
             )
         return queryset
 

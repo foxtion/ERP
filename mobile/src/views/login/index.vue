@@ -36,6 +36,8 @@
         </van-button>
       </div>
     </van-form>
+
+
   </div>
 </template>
 
@@ -56,6 +58,18 @@ const loading = ref(false)
 const rememberMe = ref(false)
 
 onMounted(() => {
+  // 清理可能残留的 Vant 函数式弹窗节点（teleport 到 body 上，页面切换时可能未销毁）
+  const vantClasses = ['.van-dialog', '.van-toast', '.van-overlay', '.van-popup']
+  vantClasses.forEach((cls) => {
+    document.querySelectorAll(cls).forEach((el) => el.remove())
+  })
+  // 同时清理函数式调用留下的空容器 div
+  document.body.querySelectorAll(':scope > div').forEach((el) => {
+    if (el.childElementCount === 0 && !el.id) {
+      el.remove()
+    }
+  })
+
   const saved = localStorage.getItem('erp_remember_username')
   if (saved) {
     form.value.username = saved
@@ -83,15 +97,19 @@ const onSubmit = async () => {
       })
     }
 
-    showToast({ type: 'success', message: '登录成功' })
-    const redirect = route.query.redirect || '/dashboard'
-    router.replace(redirect)
+    showToast({ message: '登录成功', className: 'van-toast--white' })
+    setTimeout(() => {
+      const redirect = route.query.redirect || '/dashboard'
+      router.replace(redirect)
+    }, 1500)
   } catch (e) {
     showFailToast(e?.response?.data?.message || '登录失败')
   } finally {
     loading.value = false
   }
 }
+
+
 </script>
 
 <style scoped>

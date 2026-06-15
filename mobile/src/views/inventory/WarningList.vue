@@ -17,9 +17,9 @@
         </div>
         <div class="card-body">
           <div><span class="label">物料编码：</span>{{ item.material_code || '-' }}</div>
-          <div><span class="label">规格：</span>{{ item.specification || '-' }}</div>
+          <div><span class="label">规格：</span>{{ item.spec || '-' }}</div>
           <div><span class="label">当前数量：</span><span class="current">{{ item.current_quantity || 0 }}</span></div>
-          <div><span class="label">安全库存：</span>{{ item.safety_stock || 0 }}</div>
+          <div><span class="label">安全库存：</span>{{ item.warning_threshold || 0 }}</div>
           <div><span class="label">上限阈值：</span>{{ item.max_stock || '-' }}</div>
           <div><span class="label">仓库：</span>{{ item.warehouse_name || '-' }}</div>
           <div><span class="label">预警时间：</span>{{ item.warning_time || '-' }}</div>

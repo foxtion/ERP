@@ -2,13 +2,19 @@
   <div class="list-page">
     <!-- 搜索栏 -->
     <div class="search-bar" v-if="showSearch">
-      <van-search
-        v-model="query.search"
-        :placeholder="searchPlaceholder"
-        shape="round"
-        @search="onSearch"
-        @clear="onSearch"
-      />
+      <div class="search-row">
+        <van-search
+          v-model="query.search"
+          :placeholder="searchPlaceholder"
+          shape="round"
+          @search="onSearch"
+          @clear="onSearch"
+          class="search-input"
+        />
+        <van-button type="primary" size="small" round @click="onSearch" class="search-btn">
+          搜索
+        </van-button>
+      </div>
       <slot name="filters" :query="query" />
     </div>
 
@@ -130,6 +136,19 @@ defineExpose({ list, onRefresh })
 }
 .search-bar {
   background-color: #fff;
+}
+.search-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 8px;
+}
+.search-input {
+  flex: 1;
+  padding: 0;
+}
+.search-btn {
+  flex-shrink: 0;
 }
 .fab-add {
   position: fixed;

@@ -24,7 +24,7 @@
         v-for="menu in tabbarMenus"
         :key="menu.path"
         :to="menu.path"
-        :icon="menu.icon || 'apps-o'"
+        :icon="mapIcon(menu.icon, menu.path)"
       >
         {{ menu.title }}
       </van-tabbar-item>
@@ -36,6 +36,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePermissionStore } from '@/store/permission'
+import { mapIcon } from '@/utils/icon-map'
 
 const route = useRoute()
 const router = useRouter()

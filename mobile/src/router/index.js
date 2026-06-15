@@ -408,6 +408,13 @@ const constantRoutes = [
 
 const router = createRouter({
   history: createWebHashHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0 }
+    }
+  },
   routes: constantRoutes,
   scrollBehavior() {
     return { top: 0 }

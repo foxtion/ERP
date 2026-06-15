@@ -128,8 +128,8 @@ const onSubmit = async () => {
       category: form.value.category || null,
       unit: form.value.unit || '件',
       barcode: form.value.barcode || null,
-      qty: form.value.qty !== '' ? parseFloat(form.value.qty) : 0,
-      warning_threshold: form.value.warning_threshold !== '' ? parseFloat(form.value.warning_threshold) : 50,
+      qty: form.value.qty !== '' && form.value.qty != null ? parseFloat(form.value.qty) || 0 : 0,
+      warning_threshold: form.value.warning_threshold !== '' && form.value.warning_threshold != null ? parseFloat(form.value.warning_threshold) || 50 : 50,
       status: statusActive.value ? 'active' : 'disabled',
       large_location: form.value.large_location || null,
       small_location: form.value.small_location || null,
@@ -145,7 +145,9 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    const msg = e?.response?.data?.message || e?.response?.data?.detail || e?.message || '操作失败'
+    showToast(msg)
+    console.error('[MaterialForm Submit Error]', e)
   } finally {
     submitting.value = false
   }

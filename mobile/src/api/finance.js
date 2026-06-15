@@ -40,7 +40,7 @@ export function cancelAuditVoucher(id) {
   return request({ url: `/finance/vouchers/${id}/cancel_audit/`, method: 'post', data: {} })
 }
 export function generateVoucherNo() {
-  return request({ url: '/finance/vouchers/generate-no/', method: 'get' })
+  return request({ url: '/finance/vouchers/generate_no/', method: 'get' })
 }
 
 // ==================== 应收应付 ====================
@@ -113,8 +113,8 @@ export function deleteCounterparty(id) {
 export function getCounterpartyOptions() {
   return request({ url: '/finance/counterparties/options/', method: 'get' })
 }
-export function getCounterpartyStats(id) {
-  return request({ url: `/finance/counterparties/${id}/stats/`, method: 'get' })
+export function getCounterpartyStats() {
+  return request({ url: '/finance/counterparties/stats/', method: 'get' })
 }
 
 // ==================== 对账单 ====================

@@ -7,6 +7,14 @@
         shape="round"
         @search="onSearch"
       />
+      <van-field
+        v-model="query.counterparty_name"
+        label="往来单位"
+        placeholder="请选择往来单位"
+        readonly
+        is-link
+        @click="showCounterpartyPicker = true"
+      />
       <div class="filter-row">
         <van-field
           v-model="query.start_date"
@@ -67,6 +75,13 @@
       </van-list>
     </van-pull-refresh>
 
+    <van-popup v-model:show="showCounterpartyPicker" position="bottom">
+      <van-picker
+        :columns="counterpartyColumns"
+        @confirm="(v) => { query.counterparty = v.selectedOptions[0].value; query.counterparty_name = v.selectedOptions[0].text; showCounterpartyPicker = false; onSearch() }"
+        @cancel="showCounterpartyPicker = false"
+      />
+    </van-popup>
     <van-popup v-model:show="showStartPicker" position="bottom">
       <van-date-picker @confirm="(v) => { query.start_date = formatDate(v); showStartPicker = false }" @cancel="showStartPicker = false" />
     </van-popup>
@@ -77,17 +92,37 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { getStatement } from '@/api/finance'
+import { ref, onMounted } from 'vue'
+import { getStatement, getCounterpartyOptions } from '@/api/finance'
 
 const list = ref([])
 const loading = ref(false)
 const finished = ref(false)
 const refreshing = ref(false)
-const query = ref({ search: '', start_date: '', end_date: '' })
+const query = ref({ search: '', start_date: '', end_date: '', counterparty: '' })
 const pagination = ref({ page: 1, size: 10, total: 0 })
 const showStartPicker = ref(false)
 const showEndPicker = ref(false)
+const showCounterpartyPicker = ref(false)
+const counterpartyOptions = ref([])
+const counterpartyColumns = ref([])
+
+const loadCounterpartyOptions = async () => {
+  try {
+    const res = await getCounterpartyOptions()
+    counterpartyOptions.value = res.data || []
+    counterpartyColumns.value = counterpartyOptions.value.map(item => ({
+      text: item.name,
+      value: item.id,
+    }))
+  } catch (e) {
+    // ignore
+  }
+}
+
+onMounted(() => {
+  loadCounterpartyOptions()
+})
 
 const formatDate = (selectedValues) => {
   return selectedValues.selectedValues.join('-')
@@ -99,13 +134,22 @@ const onLoad = async () => {
     pagination.value.page = 1
     refreshing.value = false
   }
+  if (!query.value.counterparty) {
+    loading.value = false
+    finished.value = true
+    return
+  }
   loading.value = true
   try {
-    const res = await getStatement({
+    const params = {
       page: pagination.value.page,
       size: pagination.value.size,
-      ...query.value,
-    })
+      search: query.value.search,
+      start_date: query.value.start_date,
+      end_date: query.value.end_date,
+      counterparty: query.value.counterparty,
+    }
+    const res = await getStatement(params)
     const data = res.data
     list.value.push(...(data.list || []))
     pagination.value.total = data.pagination?.total || 0

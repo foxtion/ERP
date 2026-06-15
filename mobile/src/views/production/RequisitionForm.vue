@@ -103,7 +103,7 @@ const onSubmit = async () => {
       items: form.value.items.map(i => ({
         material_name: i.material_name,
         spec: i.spec || null,
-        quantity: i.quantity !== '' ? parseFloat(i.quantity) : 1,
+        quantity: i.quantity !== '' && i.quantity != null ? parseFloat(i.quantity) || 1 : 1,
         unit: i.unit || '件',
         remark: i.remark || null,
       })),
@@ -115,7 +115,7 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    showToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   } finally { submitting.value = false }
 }
 

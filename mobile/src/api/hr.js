@@ -20,7 +20,7 @@ export function getEmployeeDetail(id) {
   return request({ url: `/hr/employees/${id}/`, method: 'get' })
 }
 export function generateEmployeeNo() {
-  return request({ url: '/hr/employees/generate-no/', method: 'get' })
+  return request({ url: '/hr/employees/generate_no/', method: 'get' })
 }
 export function confirmEmployee(id) {
   return request({ url: `/hr/employees/${id}/confirm/`, method: 'post', data: {} })
@@ -46,7 +46,7 @@ export function deletePosition(id) {
   return request({ url: `/hr/positions/${id}/`, method: 'delete' })
 }
 export function getPositionsByDepartment(deptId) {
-  return request({ url: '/hr/positions/by-department/', method: 'get', params: { dept_id: deptId } })
+  return request({ url: '/hr/positions/by-department/', method: 'get', params: { department_id: deptId } })
 }
 
 // ==================== 考勤记录 ====================

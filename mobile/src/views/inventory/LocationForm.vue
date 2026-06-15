@@ -135,7 +135,7 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    showToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   } finally {
     submitting.value = false
   }

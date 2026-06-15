@@ -4,9 +4,12 @@ import App from './App.vue'
 import router from './router'
 import { useUserStore } from './store/user'
 import { usePermissionStore } from './store/permission'
-import { NavBar, Tabbar, TabbarItem, Toast, Dialog } from 'vant'
+import { NavBar, Tabbar, TabbarItem, Toast, Dialog, Locale } from 'vant'
+import zhCN from 'vant/es/locale/lang/zh-CN'
 import './style.css'
 import 'vant/lib/index.css'
+
+Locale.use('zh-CN', zhCN)
 
 const app = createApp(App)
 app.use(createPinia())

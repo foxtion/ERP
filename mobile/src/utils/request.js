@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { showToast, showFailToast, showDialog } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useUserStore } from '@/store/user'
 import router from '@/router'
 
@@ -145,10 +145,8 @@ request.interceptors.response.use(
 
       if (status === 403) {
         showFailToast('权限不足，无法访问')
-        showDialog({ title: '提示', message: '权限不足，无法访问' })
       } else if (status !== 401) {
         showFailToast(message || '操作失败')
-        showDialog({ title: '提示', message: message || '操作失败' })
       }
       // 控制台输出完整错误，方便调试
       console.error(`[Request Error ${status}]`, originalRequest?.url, response.data)

@@ -121,7 +121,7 @@ const onSubmit = async () => {
   try {
     const data = {
       product_name: form.value.product_name,
-      quantity: form.value.quantity !== '' ? parseFloat(form.value.quantity) : 1,
+      quantity: form.value.quantity !== '' && form.value.quantity != null ? parseFloat(form.value.quantity) || 1 : 1,
       plan_date: form.value.plan_date,
       priority: form.value.priority,
       remark: form.value.remark || null,
@@ -136,7 +136,7 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    showToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   } finally {
     submitting.value = false
   }

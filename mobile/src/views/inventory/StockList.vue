@@ -13,7 +13,7 @@
         </div>
         <div class="card-body">
           <div><span class="label">物料编码：</span>{{ item.material_code || '-' }}</div>
-          <div><span class="label">规格：</span>{{ item.specification || '-' }}</div>
+          <div><span class="label">规格：</span>{{ item.spec || '-' }}</div>
           <div><span class="label">仓库：</span>{{ item.warehouse_name || '-' }}</div>
           <div><span class="label">库位：</span>{{ item.location_name || '-' }}</div>
           <div><span class="label">可用数量：</span><span class="available">{{ item.available_quantity || 0 }}</span></div>

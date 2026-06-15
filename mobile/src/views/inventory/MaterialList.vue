@@ -17,11 +17,11 @@
         </div>
         <div class="card-body">
           <div><span class="label">编码：</span>{{ item.code || '-' }}</div>
-          <div><span class="label">规格：</span>{{ item.specification || '-' }}</div>
+          <div><span class="label">规格：</span>{{ item.spec || '-' }}</div>
           <div><span class="label">单位：</span>{{ item.unit || '-' }}</div>
-          <div><span class="label">库存数量：</span><span class="stock">{{ item.stock_quantity || 0 }}</span></div>
-          <div><span class="label">安全库存：</span>{{ item.safety_stock || 0 }}</div>
-          <div><span class="label">分类：</span>{{ item.category_name || '-' }}</div>
+          <div><span class="label">库存数量：</span><span class="stock">{{ item.qty || 0 }}</span></div>
+          <div><span class="label">预警阈值：</span>{{ item.warning_threshold || 0 }}</div>
+          <div><span class="label">分类：</span>{{ item.category || '-' }}</div>
         </div>
         <div class="card-actions">
           <van-button

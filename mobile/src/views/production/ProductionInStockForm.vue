@@ -89,7 +89,7 @@ const onSubmit = async () => {
       stock_date: form.value.stock_date,
       warehouse: form.value.warehouse || '默认仓库',
       product_name: form.value.product_name,
-      quantity: form.value.quantity !== '' ? parseFloat(form.value.quantity) : 1,
+      quantity: form.value.quantity !== '' && form.value.quantity != null ? parseFloat(form.value.quantity) || 1 : 1,
       remark: form.value.remark || null,
     }
     if (isEdit.value) { await updateProductionInStock(route.params.id, data) }
@@ -99,7 +99,7 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    showToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   } finally { submitting.value = false }
 }
 

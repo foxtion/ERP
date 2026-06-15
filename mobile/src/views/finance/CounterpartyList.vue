@@ -128,7 +128,7 @@ const onSubmit = async () => {
     dialogVisible.value = false
     listPageRef.value.onRefresh()
   } catch (e) {
-    showFailToast(e?.response?.data?.message || '操作失败')
+    showFailToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   }
 }
 
@@ -142,7 +142,7 @@ const onDelete = (item) => {
       showToast('删除成功')
       listPageRef.value.onRefresh()
     } catch (e) {
-      showFailToast(e?.response?.data?.message || '删除失败')
+      showFailToast(e?.response?.data?.message || e?.response?.data?.detail || '删除失败')
     }
   }).catch(() => {})
 }

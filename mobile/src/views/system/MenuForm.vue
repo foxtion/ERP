@@ -207,7 +207,7 @@ async function onSubmit() {
     }
     router.back()
   } catch (e) {
-    showFailToast(e?.response?.data?.message || e.message || '操作失败')
+    showFailToast(e?.response?.data?.message || e?.response?.data?.detail || e.message || '操作失败')
   } finally {
     submitting.value = false
   }

@@ -200,9 +200,7 @@ async function onSubmit() {
   try {
     const data = { ...form.value }
     // 转换数量
-    if (data.quantity) {
-      data.quantity = parseFloat(data.quantity)
-    }
+    data.quantity = data.quantity !== '' && data.quantity != null ? parseFloat(data.quantity) || 0 : 0
     // plan_no 为空时后端自动生成
     if (!data.plan_no) {
       delete data.plan_no
@@ -220,9 +218,9 @@ async function onSubmit() {
     }
     router.back()
   } catch (e) {
-    showFailToast(e?.response?.data?.message || e.message || '操作失败')
+    showFailToast(e?.response?.data?.message || e?.response?.data?.detail || e.message || '操作失败')
     // eslint-disable-next-line no-alert
-    alert(e?.response?.data?.message || e.message || '操作失败')
+    alert(e?.response?.data?.message || e?.response?.data?.detail || e.message || '操作失败')
   } finally {
     submitting.value = false
   }

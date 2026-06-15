@@ -96,8 +96,8 @@ const onSubmit = async () => {
       summary: form.value.summary || null,
       items: form.value.items.map(i => ({
         summary: i.summary || '',
-        debit: i.debit !== '' ? parseFloat(i.debit) : 0,
-        credit: i.credit !== '' ? parseFloat(i.credit) : 0,
+        debit: i.debit !== '' && i.debit != null ? parseFloat(i.debit) || 0 : 0,
+        credit: i.credit !== '' && i.credit != null ? parseFloat(i.credit) || 0 : 0,
       })),
     }
     if (isEdit.value) { await updateVoucher(route.params.id, data) }
@@ -107,7 +107,7 @@ const onSubmit = async () => {
     router.back()
   } catch (e) {
     closeToast()
-    showToast(e?.response?.data?.message || '操作失败')
+    showToast(e?.response?.data?.message || e?.response?.data?.detail || '操作失败')
   } finally { submitting.value = false }
 }
 
